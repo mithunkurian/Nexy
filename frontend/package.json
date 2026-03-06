@@ -29,5 +29,5 @@
     "eslint": "^9",
     "eslint-config-next": "15.1.0",
     "firebase-tools": "^13.28.0"
-  }
+  } 
 }
