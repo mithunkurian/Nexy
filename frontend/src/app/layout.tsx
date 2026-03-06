@@ -9,16 +9,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#3b52ff",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen flex flex-col">
-        <main className="flex-1 pb-20">{children}</main>
+      <body className="min-h-screen bg-gray-50 flex flex-col">
+        <main className="flex-1 pb-24">{children}</main>
         <BottomNav />
       </body>
     </html>

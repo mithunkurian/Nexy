@@ -21,7 +21,14 @@ out/
 .cache
 *.log
 .env.local
+.env.production
 !.env.local.example
+!.env.production.example
+
+# Firebase
+.firebase/
+firebase-debug.log
+.firebaserc.local
 
 # OS
 .DS_Store

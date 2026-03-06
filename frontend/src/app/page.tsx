@@ -1,108 +1,114 @@
 "use client";
 import { useDevices } from "@/hooks/useDevices";
-import { RoomSection } from "@/components/devices/RoomSection";
-import { DeviceCard } from "@/components/devices/DeviceCard";
-import { Loader2, Wifi, WifiOff } from "lucide-react";
+import { GreetingHeader } from "@/components/dashboard/GreetingHeader";
+import { StatsOverview } from "@/components/dashboard/StatsOverview";
+import { QuickScenes } from "@/components/dashboard/QuickScenes";
+import { RoomCard } from "@/components/dashboard/RoomCard";
+import { ActiveDevicesStrip } from "@/components/dashboard/ActiveDevicesStrip";
+import { AskNexyBar } from "@/components/dashboard/AskNexyBar";
+import { Loader2 } from "lucide-react";
 import type { Device } from "@/types";
 
 export default function HomePage() {
   const { devices, rooms, loading, refresh } = useDevices();
 
-  const onDeviceUpdate = (updated: Device) => {
-    // Optimistic update handled by useDevices via WS, but we still propagate
-    refresh();
-  };
+  const onDeviceUpdate = (_: Device) => refresh();
 
-  // Group devices by room
-  const roomedDeviceIds = new Set(
-    rooms.flatMap((r) => r.device_ids ?? [])
-  );
-  const unroomed = devices.filter(
-    (d) => !d.room && !roomedDeviceIds.has(d.id)
-  );
+  // Map devices to rooms
+  function devicesForRoom(room: { id: string; name: string; device_ids?: string[] }): Device[] {
+    return devices.filter(
+      (d) => d.room === room.name || (room.device_ids ?? []).includes(d.id),
+    );
+  }
 
-  const onCount = devices.filter((d) => d.state.is_on).length;
+  // Devices not in any room
+  const roomedIds = new Set(rooms.flatMap((r) => r.device_ids ?? []));
+  const unroomedDevices = devices.filter((d) => !d.room && !roomedIds.has(d.id));
+
+  const allRooms = [
+    ...rooms,
+    ...(unroomedDevices.length > 0
+      ? [{ id: "other", name: "Other", device_ids: unroomedDevices.map((d) => d.id) }]
+      : []),
+  ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nexy</h1>
-          <p className="text-sm text-gray-400">
-            {loading
-              ? "Loading..."
-              : `${devices.length} device${devices.length !== 1 ? "s" : ""} · ${onCount} on`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          {loading ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : devices.length > 0 ? (
-            <Wifi size={16} className="text-green-500" />
-          ) : (
-            <WifiOff size={16} className="text-red-400" />
-          )}
-        </div>
-      </div>
+    <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+      {/* Greeting */}
+      <GreetingHeader />
 
-      {loading ? (
-        <div className="flex flex-col items-center py-16 gap-3 text-gray-400">
-          <Loader2 size={32} className="animate-spin" />
-          <p className="text-sm">Connecting to your home...</p>
+      {/* Stats */}
+      {!loading && <StatsOverview devices={devices} rooms={rooms} />}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex flex-col items-center py-10 gap-3 text-gray-300">
+          <Loader2 size={28} className="animate-spin" />
+          <span className="text-sm">Connecting to your home…</span>
         </div>
-      ) : devices.length === 0 ? (
-        <EmptyState />
-      ) : (
+      )}
+
+      {!loading && (
         <>
-          {/* Rooms */}
-          {rooms.map((room) => {
-            const roomDevices = devices.filter(
-              (d) =>
-                d.room === room.name ||
-                (room.device_ids ?? []).includes(d.id)
-            );
-            return (
-              <RoomSection
-                key={room.id}
-                room={room}
-                devices={roomDevices}
-                onDeviceUpdate={onDeviceUpdate}
-              />
-            );
-          })}
+          {/* Active devices horizontal strip */}
+          <ActiveDevicesStrip devices={devices} onUpdate={refresh} />
 
-          {/* Unroomed devices */}
-          {unroomed.length > 0 && (
+          {/* Quick scenes */}
+          <QuickScenes />
+
+          {/* Rooms grid */}
+          {allRooms.length > 0 && (
             <section>
-              <h2 className="text-base font-semibold text-gray-700 mb-3">
-                Other Devices
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                Rooms
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {unroomed.map((d) => (
-                  <DeviceCard key={d.id} device={d} onUpdate={onDeviceUpdate} />
-                ))}
-              </div>
+              {allRooms.length === 0 ? (
+                <EmptyRooms />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {allRooms.map((room) => (
+                    <RoomCard
+                      key={room.id}
+                      room={room}
+                      devices={devicesForRoom(room)}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
+
+          {/* No devices at all */}
+          {devices.length === 0 && <NoDevices />}
         </>
       )}
+
+      {/* Ask Nexy bar — always shown */}
+      <AskNexyBar />
     </div>
   );
 }
 
-function EmptyState() {
+function EmptyRooms() {
   return (
-    <div className="flex flex-col items-center py-16 gap-4 text-center">
-      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-3xl">
+    <p className="text-sm text-gray-400 text-center py-4">
+      No rooms configured yet.
+    </p>
+  );
+}
+
+function NoDevices() {
+  return (
+    <div className="flex flex-col items-center py-10 gap-3 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl">
         🏠
       </div>
       <div>
-        <p className="font-semibold text-gray-700">No devices found</p>
-        <p className="text-sm text-gray-400 mt-1 max-w-xs">
-          Make sure your IKEA Dirigera hub is configured in the backend{" "}
-          <code className="text-xs bg-gray-100 px-1 rounded">.env</code> file
-          and is reachable on your network.
+        <p className="font-semibold text-gray-700 text-sm">No devices found</p>
+        <p className="text-xs text-gray-400 mt-1 max-w-xs leading-relaxed">
+          Configure your IKEA Dirigera hub in{" "}
+          <code className="bg-gray-100 px-1 rounded text-[11px]">backend/.env</code>{" "}
+          to see your devices here.
         </p>
       </div>
     </div>
