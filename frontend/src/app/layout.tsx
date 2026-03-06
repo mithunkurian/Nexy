@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 
 export const metadata: Metadata = {
   title: "Nexy — Smart Home AI",
@@ -18,9 +19,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 flex flex-col">
-        <main className="flex-1 pb-24">{children}</main>
-        <BottomNav />
+      <body className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
+        <SettingsProvider>
+          <main className="flex-1 pb-24">{children}</main>
+          <BottomNav />
+        </SettingsProvider>
       </body>
     </html>
   );

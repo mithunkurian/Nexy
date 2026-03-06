@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/Slider";
 import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import type { Device } from "@/types";
 
 const typeIcons: Record<string, React.ElementType> = {
@@ -41,6 +42,11 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     try {
       await api.devices.command(device.id, { is_on: !isOn });
       onUpdate?.({ ...device, state: { ...device.state, is_on: !isOn } });
+      logActivity({
+        icon: isOn ? "💡" : "🌑",
+        title: `${device.name} turned ${isOn ? "off" : "on"}`,
+        detail: device.room ?? device.source,
+      });
     } finally {
       setPending(false);
     }

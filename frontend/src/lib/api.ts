@@ -1,16 +1,19 @@
 import type { Device, Room, ChatMessage, ChatResponse } from "@/types";
+import { loadSettings } from "./settings";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const API = `${BASE}/api/v1`;
+function apiBase(): string {
+  const s = loadSettings();
+  return `${s.backendUrl.replace(/\/$/, "")}/api/v1`;
+}
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, { cache: "no-store" });
+  const res = await fetch(`${apiBase()}${path}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
   return res.json();
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -36,7 +39,7 @@ export const api = {
       history: ChatMessage[],
       onToken: (token: string) => void,
     ): Promise<void> => {
-      const res = await fetch(`${API}/ai/chat/stream`, {
+      const res = await fetch(`${apiBase()}/ai/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, history }),
