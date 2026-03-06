@@ -1,4 +1,4 @@
-"use client";
+import { Suspense } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 
 export default function ChatPage() {
@@ -9,7 +9,9 @@ export default function ChatPage() {
         <p className="text-sm text-gray-400">Control your home with natural language</p>
       </div>
       <div className="h-[calc(100%-5rem)]">
-        <ChatInterface />
+        <Suspense>
+          <ChatInterface />
+        </Suspense>
       </div>
     </div>
   );
