@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  # ─── Nexy Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexy-backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    ports:
+      - "8000:8000"
+    networks:
+      - nexy-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ─── Nexy Frontend ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexy-frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_WS_URL=ws://backend:8000/api/v1/ws
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - nexy-net
+
+networks:
+  nexy-net:
+    driver: bridge
