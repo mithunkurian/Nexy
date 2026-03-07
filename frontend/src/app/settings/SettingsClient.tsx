@@ -180,11 +180,12 @@ export default function SettingsClient() {
   const [importError, setImportError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // ── Fix: sync draft once localStorage has loaded ──────────────────────────
+  // ── Sync draft: once localStorage loads, AND again when Firestore first ──
+  // responds (in case Firestore has newer data than what's in localStorage) ──
   useEffect(() => {
-    if (hydrated) setDraft({ ...settings });
+    if (hydrated || synced) setDraft({ ...settings });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, synced]);
 
   function patch<K extends keyof AppSettings>(key: K, val: AppSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: val }));
