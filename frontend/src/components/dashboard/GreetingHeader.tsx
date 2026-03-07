@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Sun, Cloud, Sunset, Moon, MapPin } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLiveInfo } from "@/hooks/useLiveInfo";
 
 type Period = "morning" | "afternoon" | "evening" | "night";
 
@@ -22,9 +23,15 @@ const PERIOD_CONFIG: Record<
   night:     { greeting: "Good night",     sub: "All quiet at home",                icon: Moon,   gradient: "from-indigo-50 to-slate-100" },
 };
 
+function minuteLabel(min: number): string {
+  if (min === 0) return "Now";
+  return `${min} min`;
+}
+
 export function GreetingHeader() {
   const { settings } = useSettings();
   const [now, setNow] = useState<Date | null>(null);
+  const { weather, departuresTo, departuresFrom } = useLiveInfo();
 
   useEffect(() => {
     setNow(new Date());
@@ -50,6 +57,10 @@ export function GreetingHeader() {
     day: "numeric",
     month: "long",
   });
+
+  const nextTo   = departuresTo[0];
+  const nextFrom = departuresFrom[0];
+  const stopB    = settings.commuteStopB;
 
   return (
     <div
@@ -87,6 +98,48 @@ export function GreetingHeader() {
             </>
           )}
         </div>
+
+        {/* Live info strip — weather + bus in one line */}
+        {(weather || nextTo || nextFrom) && (
+          <div className="flex items-center gap-3 flex-wrap mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/10 text-xs text-gray-600 dark:text-gray-400">
+            {/* Weather */}
+            {weather && (
+              <span className="flex items-center gap-1">
+                <span>{weather.emoji}</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-200">{weather.temp}°C</span>
+                <span className="text-gray-400">· {weather.label}</span>
+              </span>
+            )}
+
+            {/* Bus to destination */}
+            {nextTo && stopB && (
+              <>
+                {weather && <span className="text-gray-300 dark:text-gray-600 select-none">·</span>}
+                <span className="flex items-center gap-1">
+                  <span>🚌</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {minuteLabel(nextTo.minutes)}
+                  </span>
+                  <span className="text-gray-400">→ {stopB}</span>
+                </span>
+              </>
+            )}
+
+            {/* Bus from destination */}
+            {nextFrom && stopB && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600 select-none">·</span>
+                <span className="flex items-center gap-1">
+                  <span>🚌</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {minuteLabel(nextFrom.minutes)}
+                  </span>
+                  <span className="text-gray-400">from {stopB}</span>
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { ControlTiles } from "@/components/dashboard/ControlTiles";
 import { QuickScenes } from "@/components/dashboard/QuickScenes";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { AskNexyBar } from "@/components/dashboard/AskNexyBar";
+import { LiveInfoTile } from "@/components/dashboard/LiveInfoTile";
 import { Loader2 } from "lucide-react";
 
 export default function HomeClient() {
@@ -16,6 +17,9 @@ export default function HomeClient() {
     <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
       {/* 1 — Greeting (always visible, reads from Settings) */}
       <GreetingHeader />
+
+      {/* Live info — weather, bus, electricity */}
+      <LiveInfoTile />
 
       {loading ? (
         <div className="flex flex-col items-center py-14 gap-3 text-gray-300 dark:text-gray-600">
