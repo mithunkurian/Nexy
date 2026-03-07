@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { Sun, Cloud, Sunset, Moon, MapPin } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
-import { useLiveInfo } from "@/hooks/useLiveInfo";
 
 type Period = "morning" | "afternoon" | "evening" | "night";
 
@@ -23,15 +22,9 @@ const PERIOD_CONFIG: Record<
   night:     { greeting: "Good night",     sub: "All quiet at home",                icon: Moon,   gradient: "from-indigo-50 to-slate-100" },
 };
 
-function minuteLabel(min: number): string {
-  if (min === 0) return "Now";
-  return `${min} min`;
-}
-
 export function GreetingHeader() {
   const { settings } = useSettings();
   const [now, setNow] = useState<Date | null>(null);
-  const { weather, departuresTo, departuresFrom } = useLiveInfo();
 
   useEffect(() => {
     setNow(new Date());
@@ -41,16 +34,16 @@ export function GreetingHeader() {
 
   if (!now) {
     return (
-      <div className="h-32 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+      <div className="h-32 lg:h-28 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
     );
   }
 
   const period = getPeriod(now.getHours());
   const { greeting, sub, icon: Icon, gradient } = PERIOD_CONFIG[period];
 
-  const name = settings.ownerName ? `, ${settings.ownerName}` : "";
+  const name     = settings.ownerName ? `, ${settings.ownerName}` : "";
   const homeName = settings.homeName || "My Home";
-  const address = settings.address;
+  const address  = settings.address;
 
   const dateStr = now.toLocaleDateString("en-GB", {
     weekday: "long",
@@ -58,26 +51,22 @@ export function GreetingHeader() {
     month: "long",
   });
 
-  const nextTo   = departuresTo[0];
-  const nextFrom = departuresFrom[0];
-  const stopB    = settings.commuteStopB;
-
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} dark:from-gray-800 dark:to-gray-900 border border-white/80 dark:border-gray-700 shadow-sm px-5 py-5`}
+      className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} dark:from-gray-800 dark:to-gray-900 border border-white/80 dark:border-gray-700 shadow-sm px-5 py-5 lg:py-4`}
     >
-      {/* Decorative orbs */}
-      <div className="pointer-events-none absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/50 dark:bg-white/5" />
-      <div className="pointer-events-none absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-white/40 dark:bg-white/5" />
+      {/* Decorative orbs — hidden on kiosk to save space */}
+      <div className="pointer-events-none absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/50 dark:bg-white/5 lg:hidden" />
+      <div className="pointer-events-none absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-white/40 dark:bg-white/5 lg:hidden" />
 
       <div className="relative">
         {/* Greeting + icon */}
-        <div className="flex items-start justify-between mb-3">
+        <div className="flex items-start justify-between mb-3 lg:mb-2">
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">
               {dateStr}
             </p>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
+            <h1 className="text-2xl lg:text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
               {greeting}{name}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{sub}</p>
@@ -88,7 +77,7 @@ export function GreetingHeader() {
         </div>
 
         {/* Home name + address chip */}
-        <div className="flex items-center gap-1.5 pt-3 border-t border-black/5 dark:border-white/10">
+        <div className="flex items-center gap-1.5 pt-3 lg:pt-2 border-t border-black/5 dark:border-white/10">
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">🏠 {homeName}</span>
           {address && (
             <>
@@ -98,48 +87,6 @@ export function GreetingHeader() {
             </>
           )}
         </div>
-
-        {/* Live info strip — weather + bus in one line */}
-        {(weather || nextTo || nextFrom) && (
-          <div className="flex items-center gap-3 flex-wrap mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/10 text-xs text-gray-600 dark:text-gray-400">
-            {/* Weather */}
-            {weather && (
-              <span className="flex items-center gap-1">
-                <span>{weather.emoji}</span>
-                <span className="font-semibold text-gray-800 dark:text-gray-200">{weather.temp}°C</span>
-                <span className="text-gray-400">· {weather.label}</span>
-              </span>
-            )}
-
-            {/* Bus to destination */}
-            {nextTo && stopB && (
-              <>
-                {weather && <span className="text-gray-300 dark:text-gray-600 select-none">·</span>}
-                <span className="flex items-center gap-1">
-                  <span>🚌</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    {minuteLabel(nextTo.minutes)}
-                  </span>
-                  <span className="text-gray-400">→ {stopB}</span>
-                </span>
-              </>
-            )}
-
-            {/* Bus from destination */}
-            {nextFrom && stopB && (
-              <>
-                <span className="text-gray-300 dark:text-gray-600 select-none">·</span>
-                <span className="flex items-center gap-1">
-                  <span>🚌</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    {minuteLabel(nextFrom.minutes)}
-                  </span>
-                  <span className="text-gray-400">from {stopB}</span>
-                </span>
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

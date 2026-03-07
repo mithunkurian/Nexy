@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { getActivity, formatRelative, type ActivityEntry } from "@/lib/activity";
 
-export function ActivityFeed() {
+export function ActivityFeed({ className }: { className?: string }) {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
 
   function load() {
@@ -19,11 +19,11 @@ export function ActivityFeed() {
   if (entries.length === 0) return null;
 
   return (
-    <section>
+    <section className={className}>
       <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
         Recent Activity
       </h2>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-50 dark:divide-gray-800 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm divide-y divide-gray-50 dark:divide-gray-800 overflow-hidden lg:overflow-y-auto lg:flex-1 lg:min-h-0">
         {entries.map((e) => (
           <div key={e.id} className="flex items-start gap-3 px-4 py-3">
             <span className="flex-shrink-0 text-base mt-0.5">{e.icon}</span>
