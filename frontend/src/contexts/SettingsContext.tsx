@@ -16,22 +16,26 @@ import {
 
 interface SettingsContextValue {
   settings: AppSettings;
+  hydrated: boolean;          // true once localStorage has been read
   update: (patch: Partial<AppSettings>) => void;
   reset: () => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
   settings: DEFAULT_SETTINGS,
+  hydrated: false,
   update: () => {},
   reset: () => {},
 });
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage once on mount
+  // Hydrate from localStorage once on mount, then mark as hydrated
   useEffect(() => {
     setSettings(loadSettings());
+    setHydrated(true);
   }, []);
 
   // Apply theme class to <html>
@@ -63,7 +67,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ settings, update, reset }}>
+    <SettingsContext.Provider value={{ settings, hydrated, update, reset }}>
       {children}
     </SettingsContext.Provider>
   );
