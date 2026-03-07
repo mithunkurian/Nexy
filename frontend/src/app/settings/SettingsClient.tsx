@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 import {
   type AppSettings,
@@ -21,8 +21,12 @@ import {
   Monitor,
   Server,
   Bus,
+  Share2,
+  Download,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VERSION_LABEL } from "@/lib/version";
 
 // ─── Reusable form pieces ────────────────────────────────────────────────────
 
@@ -72,14 +76,16 @@ function TextInput({
   value,
   onChange,
   placeholder,
+  type = "text",
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  type?: string;
 }) {
   return (
     <input
-      type="text"
+      type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -166,9 +172,18 @@ function ColorSwatches({
 // ─── Main client component ────────────────────────────────────────────────────
 
 export default function SettingsClient() {
-  const { settings, update, reset } = useSettings();
+  const { settings, hydrated, update, reset } = useSettings();
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
+  const [importCode, setImportCode] = useState("");
+  const [importError, setImportError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  // ── Fix: sync draft once localStorage has loaded ──────────────────────────
+  useEffect(() => {
+    if (hydrated) setDraft({ ...settings });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   function patch<K extends keyof AppSettings>(key: K, val: AppSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: val }));
@@ -184,6 +199,31 @@ export default function SettingsClient() {
     if (!confirm("Reset all settings to defaults?")) return;
     reset();
     setDraft({ ...DEFAULT_SETTINGS });
+  }
+
+  // ── Export: encode all settings as a base64 string ───────────────────────
+  function handleExport() {
+    const code = btoa(JSON.stringify(settings));
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  // ── Import: decode the base64 string and apply settings ──────────────────
+  function handleImport() {
+    try {
+      const decoded = JSON.parse(atob(importCode.trim()));
+      const merged: AppSettings = { ...DEFAULT_SETTINGS, ...decoded };
+      update(merged);
+      setDraft(merged);
+      setImportCode("");
+      setImportError("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setImportError("Invalid code — please copy it again from your other device.");
+    }
   }
 
   return (
@@ -210,11 +250,11 @@ export default function SettingsClient() {
             placeholder="e.g. My Home"
           />
         </Field>
-        <Field label="Address" hint="Your home address — shown below the home name">
+        <Field label="Address" hint="Your home address — used for weather location">
           <TextInput
             value={draft.address}
             onChange={(v) => patch("address", v)}
-            placeholder="e.g. 12 Maple Street, Helsinki"
+            placeholder="e.g. Huddinge, Sweden"
           />
         </Field>
       </Section>
@@ -310,6 +350,52 @@ export default function SettingsClient() {
         </Field>
       </Section>
 
+      {/* Sync across devices */}
+      <Section title="Sync Across Devices" icon={Share2}>
+        <Field
+          label="Export Settings"
+          hint="Copy this code and paste it on any other device to sync all your settings instantly."
+        >
+          <button
+            onClick={handleExport}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all",
+              copied
+                ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300"
+            )}
+          >
+            {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
+            {copied ? "Copied to clipboard!" : "Copy Settings Code"}
+          </button>
+        </Field>
+        <Field
+          label="Import Settings"
+          hint="Paste a settings code from another device here to apply all settings."
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={importCode}
+              onChange={(e) => { setImportCode(e.target.value); setImportError(""); }}
+              placeholder="Paste settings code here…"
+              className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+            />
+            <button
+              onClick={handleImport}
+              disabled={!importCode.trim()}
+              className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40 hover:bg-blue-600 transition-all flex items-center gap-1.5"
+            >
+              <Download size={14} />
+              Apply
+            </button>
+          </div>
+          {importError && (
+            <p className="text-xs text-red-500 mt-1">{importError}</p>
+          )}
+        </Field>
+      </Section>
+
       {/* Save / Reset */}
       <div className="flex gap-3">
         <button
@@ -354,8 +440,8 @@ export default function SettingsClient() {
           <ChevronRight size={15} className="text-gray-300" />
         </a>
         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-50 dark:border-gray-800">
-          <span className="text-sm text-gray-400">Nexy Version</span>
-          <span className="text-sm font-mono text-gray-500">0.1.0</span>
+          <span className="text-sm text-gray-400">Version</span>
+          <span className="text-xs font-mono text-gray-500">{VERSION_LABEL}</span>
         </div>
       </section>
     </div>
