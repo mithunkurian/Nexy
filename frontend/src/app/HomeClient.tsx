@@ -9,6 +9,7 @@ import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { AskNexyBar } from "@/components/dashboard/AskNexyBar";
 import { LiveInfoTile } from "@/components/dashboard/LiveInfoTile";
 import { Loader2 } from "lucide-react";
+import { VERSION_LABEL } from "@/lib/version";
 
 export default function HomeClient() {
   const { devices, rooms, loading } = useDevices();
@@ -47,6 +48,11 @@ export default function HomeClient() {
 
       {/* 7 — Nexy AI bar (always visible at bottom) */}
       <AskNexyBar />
+
+      {/* 8 — Version badge */}
+      <p className="text-center text-[11px] text-gray-300 dark:text-gray-600 pb-2 select-none">
+        {VERSION_LABEL}
+      </p>
     </div>
   );
 }
