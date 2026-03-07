@@ -36,17 +36,63 @@ export interface WeatherData {
   location: string;
 }
 
+/**
+ * Builds a list of progressively simpler search terms from an address.
+ * e.g. "Solfagravägen 42L, 141 42 Huddinge" →
+ *   ["Solfagravägen 42L, 141 42 Huddinge", "Solfagravägen 42L", "Huddinge"]
+ */
+function buildSearchTerms(address: string): string[] {
+  const terms: string[] = [address];
+
+  const parts = address.split(",").map((s) => s.trim()).filter(Boolean);
+
+  for (const part of parts) {
+    // Strip leading postal-code numbers like "141 42 " to extract city name
+    const stripped = part.replace(/^\d[\d\s]*/, "").trim();
+    if (stripped && stripped !== address) terms.push(stripped);
+    if (part !== address) terms.push(part);
+  }
+
+  // Always try the very last segment (usually the city)
+  if (parts.length > 1) {
+    const last = parts[parts.length - 1].replace(/^\d[\d\s]*/, "").trim();
+    if (last) terms.push(last);
+  }
+
+  // Deduplicate while preserving order
+  return [...new Set(terms)].filter(Boolean);
+}
+
+async function tryGeocode(
+  term: string,
+): Promise<{ latitude: number; longitude: number; name: string } | null> {
+  try {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(term)}&count=1&language=en&format=json`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.results?.length) return null;
+    return data.results[0] as { latitude: number; longitude: number; name: string };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchWeather(address: string): Promise<WeatherData | null> {
   try {
-    // Geocode the address using Open-Meteo's free geocoding API
-    const geoRes = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address)}&count=1&language=en&format=json`,
-    );
-    if (!geoRes.ok) return null;
-    const geo = await geoRes.json();
-    if (!geo.results?.length) return null;
+    // Try each search term until we get a geocoding result
+    const searchTerms = buildSearchTerms(address);
+    let geoResult: { latitude: number; longitude: number; name: string } | null = null;
 
-    const { latitude, longitude, name } = geo.results[0];
+    for (const term of searchTerms) {
+      geoResult = await tryGeocode(term);
+      if (geoResult) break;
+    }
+
+    if (!geoResult) return null;
+
+    const { latitude, longitude, name } = geoResult;
 
     // Fetch current weather
     const wxRes = await fetch(
