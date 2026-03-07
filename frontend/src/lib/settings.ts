@@ -16,6 +16,12 @@ export interface AppSettings {
   backendUrl: string;
   wsUrl: string;
   aiProvider: AIProvider;
+
+  // Commute & Live Info
+  commuteStopA: string;       // Home stop, e.g. "Storängsstigen"
+  commuteStopB: string;       // Destination stop, e.g. "Huddinge Station"
+  trafiklabApiKey: string;    // Free key from trafiklab.se (ResRobot API)
+  electricityZone: string;    // SE1 / SE2 / SE3 / SE4 (default SE3 = Stockholm)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +30,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   address: "",
   theme: "light",
   accentColor: "blue",
+  commuteStopA: "",
+  commuteStopB: "",
+  trafiklabApiKey: "",
+  electricityZone: "SE3",
   backendUrl:
     typeof window !== "undefined"
       ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
