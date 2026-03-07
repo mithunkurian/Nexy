@@ -26,6 +26,7 @@ import {
   Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VERSION_LABEL } from "@/lib/version";
 
 // ─── Reusable form pieces ────────────────────────────────────────────────────
 
@@ -439,8 +440,8 @@ export default function SettingsClient() {
           <ChevronRight size={15} className="text-gray-300" />
         </a>
         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-50 dark:border-gray-800">
-          <span className="text-sm text-gray-400">Nexy Version</span>
-          <span className="text-sm font-mono text-gray-500">0.1.0</span>
+          <span className="text-sm text-gray-400">Version</span>
+          <span className="text-xs font-mono text-gray-500">{VERSION_LABEL}</span>
         </div>
       </section>
     </div>

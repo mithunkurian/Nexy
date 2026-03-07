@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
+// Stamped at build time — changes on every deployment
+const buildDate = new Date().toLocaleDateString("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "2-digit",
+}); // e.g. "07 Mar 26"
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_DATE: buildDate,
+  },
   // Static export for Firebase Hosting
   output: "export",
 
