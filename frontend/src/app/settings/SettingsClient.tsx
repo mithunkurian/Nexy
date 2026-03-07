@@ -20,6 +20,7 @@ import {
   Sun,
   Monitor,
   Server,
+  Bus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -250,6 +251,46 @@ export default function SettingsClient() {
             value={draft.wsUrl}
             onChange={(v) => patch("wsUrl", v)}
             placeholder="ws://localhost:8000/api/v1/ws"
+          />
+        </Field>
+      </Section>
+
+      {/* Commute & Live Info */}
+      <Section title="Commute & Live Info" icon={Bus}>
+        <Field label="Home Stop" hint='Your home bus/tram stop name, e.g. "Storängsstigen"'>
+          <TextInput
+            value={draft.commuteStopA}
+            onChange={(v) => patch("commuteStopA", v)}
+            placeholder="e.g. Storängsstigen"
+          />
+        </Field>
+        <Field label="Destination Stop" hint='Your destination stop, e.g. "Huddinge Station"'>
+          <TextInput
+            value={draft.commuteStopB}
+            onChange={(v) => patch("commuteStopB", v)}
+            placeholder="e.g. Huddinge Station"
+          />
+        </Field>
+        <Field
+          label="Trafiklab API Key"
+          hint="Free key from trafiklab.se → ResRobot API. Required for bus times."
+        >
+          <TextInput
+            value={draft.trafiklabApiKey}
+            onChange={(v) => patch("trafiklabApiKey", v)}
+            placeholder="Enter your ResRobot API key"
+          />
+        </Field>
+        <Field label="Electricity Zone" hint="Swedish price zone for live electricity prices">
+          <ChipGroup<string>
+            value={draft.electricityZone || "SE3"}
+            onChange={(v) => patch("electricityZone", v)}
+            options={[
+              { value: "SE1", label: "SE1 (North)" },
+              { value: "SE2", label: "SE2 (Mid-N)" },
+              { value: "SE3", label: "SE3 (Stockholm)" },
+              { value: "SE4", label: "SE4 (South)" },
+            ]}
           />
         </Field>
       </Section>
