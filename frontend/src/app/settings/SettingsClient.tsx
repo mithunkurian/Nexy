@@ -24,6 +24,7 @@ import {
   Share2,
   Download,
   Copy,
+  Cloud,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VERSION_LABEL } from "@/lib/version";
@@ -172,7 +173,7 @@ function ColorSwatches({
 // ─── Main client component ────────────────────────────────────────────────────
 
 export default function SettingsClient() {
-  const { settings, hydrated, update, reset } = useSettings();
+  const { settings, hydrated, synced, update, reset } = useSettings();
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
   const [importCode, setImportCode] = useState("");
@@ -229,9 +230,21 @@ export default function SettingsClient() {
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Configure your Nexy experience</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Configure your Nexy experience</p>
+        </div>
+        {/* Cloud sync status badge */}
+        <div className={cn(
+          "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium mt-1",
+          synced
+            ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+            : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+        )}>
+          <Cloud size={11} />
+          {synced ? "Synced" : "Syncing…"}
+        </div>
       </div>
 
       {/* Profile */}
@@ -352,9 +365,23 @@ export default function SettingsClient() {
 
       {/* Sync across devices */}
       <Section title="Sync Across Devices" icon={Share2}>
+        {/* Cloud sync info row */}
+        <div className="flex items-start gap-3 px-5 py-4">
+          <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Cloud size={14} className="text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              Automatic cloud sync is active
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Settings are saved to Firebase and instantly shared across all your devices — no manual steps needed.
+            </p>
+          </div>
+        </div>
         <Field
-          label="Export Settings"
-          hint="Copy this code and paste it on any other device to sync all your settings instantly."
+          label="Manual Backup"
+          hint="Use this if you want to copy settings to a device that's offline."
         >
           <button
             onClick={handleExport}
