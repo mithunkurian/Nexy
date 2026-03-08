@@ -230,8 +230,10 @@ export default function SettingsClient() {
         setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "403 — Calendar is private. In Google Calendar → Settings → your calendar → Access permissions → tick \"Make available to public\"." } }));
       } else if (res.status === 404) {
         setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "404 — Calendar not found. Check the Calendar ID is correct (usually your Gmail address)." } }));
+      } else if (res.status === 401) {
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "401 — API key not authorised. Fix: (1) Go to console.cloud.google.com → APIs & Services → Enabled APIs → make sure \"Google Calendar API\" is enabled. (2) Check the key has no HTTP referrer restrictions, or add nexy-smarthome.web.app/* to the allowed list." } }));
       } else if (res.status === 400) {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "400 — Bad request. Check your API key is valid and has Google Calendar API enabled." } }));
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "400 — Bad request. Check your API key format is correct (starts with AIza…)." } }));
       } else {
         setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: `Error ${res.status} — check API key restrictions in Google Cloud Console.` } }));
       }
