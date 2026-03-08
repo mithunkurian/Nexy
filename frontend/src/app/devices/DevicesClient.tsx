@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import type { Device, DeviceType } from "@/types";
+import { useLandscape } from "@/hooks/useLandscape";
 
 const TYPE_FILTERS: { label: string; value: DeviceType | "all" }[] = [
   { label: "All", value: "all" },
@@ -15,6 +16,7 @@ const TYPE_FILTERS: { label: string; value: DeviceType | "all" }[] = [
 ];
 
 export default function DevicesClient() {
+  const landscape = useLandscape();
   const { devices, loading, refresh } = useDevices();
   const [filter, setFilter] = useState<DeviceType | "all">("all");
 
@@ -24,16 +26,21 @@ export default function DevicesClient() {
   const onUpdate = (updated: Device) => refresh();
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">All Devices</h1>
+    <div className={landscape
+      ? "h-full flex flex-col px-4 py-3 overflow-hidden"
+      : "max-w-2xl mx-auto px-4 py-6 space-y-5"
+    }>
+      <div className="flex-shrink-0">
+        <h1 className={landscape ? "text-xl font-bold text-gray-900 dark:text-gray-100" : "text-2xl font-bold text-gray-900 dark:text-gray-100"}>
+          All Devices
+        </h1>
         <p className="text-sm text-gray-400">
           {devices.length} device{devices.length !== 1 ? "s" : ""} total
         </p>
       </div>
 
       {/* Filter chips */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 flex-shrink-0">
         {TYPE_FILTERS.map(({ label, value }) => (
           <button
             key={value}
@@ -41,7 +48,7 @@ export default function DevicesClient() {
             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
               filter === value
                 ? "bg-nexy-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
             }`}
           >
             {label}
@@ -56,10 +63,12 @@ export default function DevicesClient() {
       ) : filtered.length === 0 ? (
         <p className="text-center py-12 text-gray-400 text-sm">No devices found.</p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {filtered.map((d) => (
-            <DeviceCard key={d.id} device={d} onUpdate={onUpdate} />
-          ))}
+        <div className={`${landscape ? "flex-1 min-h-0 overflow-y-auto" : ""}`}>
+          <div className={`grid gap-3 ${landscape ? "grid-cols-4 lg:grid-cols-5" : "grid-cols-2 sm:grid-cols-3"}`}>
+            {filtered.map((d) => (
+              <DeviceCard key={d.id} device={d} onUpdate={onUpdate} />
+            ))}
+          </div>
         </div>
       )}
     </div>
