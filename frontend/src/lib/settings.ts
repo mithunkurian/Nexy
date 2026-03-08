@@ -2,6 +2,13 @@ export type Theme = "light" | "dark" | "system";
 export type AccentColor = "blue" | "green" | "purple" | "amber";
 export type AIProvider = "anthropic" | "openai" | "ollama";
 
+export interface TransitRoute {
+  id: string;           // unique key (crypto.randomUUID)
+  fromStop: string;     // stop name to look up, e.g. "Storängsstigen (Huddinge)"
+  toStop: string;       // destination label (display only), e.g. "Huddinge (Huddinge)"
+  lineFilter: string;   // line number string to filter departures, e.g. "705"
+}
+
 export interface AppSettings {
   // Identity
   ownerName: string;
@@ -18,10 +25,9 @@ export interface AppSettings {
   aiProvider: AIProvider;
 
   // Commute & Live Info
-  commuteStopA: string;       // Home stop, e.g. "Storängsstigen"
-  commuteStopB: string;       // Destination stop, e.g. "Huddinge Station"
-  trafiklabApiKey: string;    // Free key from trafiklab.se (ResRobot API)
-  electricityZone: string;    // SE1 / SE2 / SE3 / SE4 (default SE3 = Stockholm)
+  transitRoutes: TransitRoute[];   // Configured commute routes with line filters
+  trafiklabApiKey: string;         // Free key from trafiklab.se (ResRobot API)
+  electricityZone: string;         // SE1 / SE2 / SE3 / SE4 (default SE3 = Stockholm)
 
   // Google Calendar
   googleCalendarId: string;   // Calendar ID, e.g. your-email@gmail.com
@@ -34,8 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   address: "",
   theme: "light",
   accentColor: "blue",
-  commuteStopA: "",
-  commuteStopB: "",
+  transitRoutes: [],
   trafiklabApiKey: "",
   electricityZone: "SE3",
   backendUrl:

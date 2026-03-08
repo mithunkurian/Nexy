@@ -2,14 +2,13 @@
 import { useEffect, useState } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { fetchWeather, type WeatherData } from "@/lib/weather";
-import { fetchDepartures, type DepartureInfo } from "@/lib/sl";
+import { fetchRouteDepartures, type RouteDeparture } from "@/lib/sl";
 import { fetchElectricityPrice, type ElectricityData } from "@/lib/electricity";
 import { fetchCalendarEvents, type CalendarEvent } from "@/lib/calendar";
 
 export interface LiveInfo {
   weather: WeatherData | null;
-  departuresTo: DepartureInfo[];    // from home stop → destination
-  departuresFrom: DepartureInfo[];  // from destination → home stop
+  routeDepartures: RouteDeparture[];
   electricity: ElectricityData | null;
   calendarEvents: CalendarEvent[];
   loading: boolean;
@@ -18,8 +17,7 @@ export interface LiveInfo {
 export function useLiveInfo(): LiveInfo {
   const { settings } = useSettings();
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [departuresTo, setDeparturesTo] = useState<DepartureInfo[]>([]);
-  const [departuresFrom, setDeparturesFrom] = useState<DepartureInfo[]>([]);
+  const [routeDepartures, setRouteDepartures] = useState<RouteDeparture[]>([]);
   const [electricity, setElectricity] = useState<ElectricityData | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,18 +38,13 @@ export function useLiveInfo(): LiveInfo {
       setWeather(wx);
       setElectricity(elec);
 
-      // Bus data only when API key + both stop names are configured
-      if (settings.trafiklabApiKey && settings.commuteStopA && settings.commuteStopB) {
-        const [to, from] = await Promise.all([
-          fetchDepartures(settings.commuteStopA, settings.trafiklabApiKey),
-          fetchDepartures(settings.commuteStopB, settings.trafiklabApiKey),
-        ]);
+      // Transit: only when API key + at least one route configured
+      if (settings.trafiklabApiKey && settings.transitRoutes.length > 0) {
+        const departures = await fetchRouteDepartures(settings.transitRoutes, settings.trafiklabApiKey);
         if (cancelled) return;
-        setDeparturesTo(to);
-        setDeparturesFrom(from);
+        setRouteDepartures(departures);
       } else {
-        setDeparturesTo([]);
-        setDeparturesFrom([]);
+        setRouteDepartures([]);
       }
 
       // Google Calendar — only when both fields are configured
@@ -81,11 +74,10 @@ export function useLiveInfo(): LiveInfo {
     settings.address,
     settings.electricityZone,
     settings.trafiklabApiKey,
-    settings.commuteStopA,
-    settings.commuteStopB,
+    settings.transitRoutes,
     settings.googleCalendarId,
     settings.googleCalendarApiKey,
   ]);
 
-  return { weather, departuresTo, departuresFrom, electricity, calendarEvents, loading };
+  return { weather, routeDepartures, electricity, calendarEvents, loading };
 }

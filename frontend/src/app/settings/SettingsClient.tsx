@@ -6,6 +6,7 @@ import {
   type Theme,
   type AccentColor,
   type AIProvider,
+  type TransitRoute,
   DEFAULT_SETTINGS,
 } from "@/lib/settings";
 import {
@@ -26,6 +27,8 @@ import {
   Copy,
   Cloud,
   Calendar,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VERSION_LABEL } from "@/lib/version";
@@ -198,6 +201,8 @@ export default function SettingsClient() {
   const [importError, setImportError] = useState("");
   const [copied, setCopied] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("profile");
+  const [newRoute, setNewRoute] = useState<Omit<TransitRoute, "id">>({ fromStop: "", toStop: "", lineFilter: "" });
+  const [addingRoute, setAddingRoute] = useState(false);
 
   useEffect(() => {
     if (hydrated || synced) setDraft({ ...settings });
@@ -293,14 +298,97 @@ export default function SettingsClient() {
 
     commute: (
       <SectionCard title="Commute & Live Info" icon={Bus}>
-        <Field label="Home Stop" hint='Your home bus/tram stop name, e.g. "Storängsstigen"'>
-          <TextInput value={draft.commuteStopA} onChange={(v) => patch("commuteStopA", v)} placeholder="e.g. Storängsstigen" />
+        {/* Route list */}
+        <Field
+          label="Transit Routes"
+          hint="Each route fetches departures from a stop filtered by line number. Add up to 6 routes."
+        >
+          <div className="space-y-2">
+            {draft.transitRoutes.map((route) => (
+              <div
+                key={route.id}
+                className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">
+                    {route.fromStop} → {route.toStop}
+                  </p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">Line {route.lineFilter}</p>
+                </div>
+                <button
+                  onClick={() => patch("transitRoutes", draft.transitRoutes.filter((r) => r.id !== route.id))}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors mt-0.5"
+                  title="Remove route"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+
+            {/* Add route form */}
+            {addingRoute ? (
+              <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50/50 dark:bg-blue-900/10">
+                <input
+                  type="text"
+                  value={newRoute.fromStop}
+                  onChange={(e) => setNewRoute((r) => ({ ...r, fromStop: e.target.value }))}
+                  placeholder="From stop, e.g. Storängsstigen (Huddinge)"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
+                />
+                <input
+                  type="text"
+                  value={newRoute.toStop}
+                  onChange={(e) => setNewRoute((r) => ({ ...r, toStop: e.target.value }))}
+                  placeholder="To stop, e.g. Huddinge (Huddinge)"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
+                />
+                <input
+                  type="text"
+                  value={newRoute.lineFilter}
+                  onChange={(e) => setNewRoute((r) => ({ ...r, lineFilter: e.target.value }))}
+                  placeholder="Line number, e.g. 705"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
+                />
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      if (!newRoute.fromStop.trim() || !newRoute.toStop.trim() || !newRoute.lineFilter.trim()) return;
+                      const route: TransitRoute = {
+                        id: crypto.randomUUID(),
+                        fromStop: newRoute.fromStop.trim(),
+                        toStop: newRoute.toStop.trim(),
+                        lineFilter: newRoute.lineFilter.trim(),
+                      };
+                      patch("transitRoutes", [...draft.transitRoutes, route]);
+                      setNewRoute({ fromStop: "", toStop: "", lineFilter: "" });
+                      setAddingRoute(false);
+                    }}
+                    disabled={!newRoute.fromStop.trim() || !newRoute.toStop.trim() || !newRoute.lineFilter.trim()}
+                    className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-blue-600 transition-colors"
+                  >
+                    Add Route
+                  </button>
+                  <button
+                    onClick={() => { setAddingRoute(false); setNewRoute({ fromStop: "", toStop: "", lineFilter: "" }); }}
+                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : draft.transitRoutes.length < 6 ? (
+              <button
+                onClick={() => setAddingRoute(true)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 text-xs text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+              >
+                <Plus size={13} /> Add route
+              </button>
+            ) : null}
+          </div>
         </Field>
-        <Field label="Destination Stop" hint='Your destination stop, e.g. "Huddinge Station"'>
-          <TextInput value={draft.commuteStopB} onChange={(v) => patch("commuteStopB", v)} placeholder="e.g. Huddinge Station" />
-        </Field>
-        <Field label="Trafiklab API Key" hint="Free key from trafiklab.se → ResRobot API. Required for bus times.">
-          <TextInput value={draft.trafiklabApiKey} onChange={(v) => patch("trafiklabApiKey", v)} placeholder="Enter your ResRobot API key" />
+
+        <Field label="Trafiklab API Key" hint="Free key from trafiklab.se → ResRobot API. Required for transit times.">
+          <TextInput value={draft.trafiklabApiKey} onChange={(v) => patch("trafiklabApiKey", v)} placeholder="Enter your ResRobot API key" type="password" />
         </Field>
         <Field label="Electricity Zone" hint="Swedish price zone for live electricity prices">
           <ChipGroup<string>

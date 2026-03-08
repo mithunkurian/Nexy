@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useLiveInfo } from "@/hooks/useLiveInfo";
-import { useSettings } from "@/contexts/SettingsContext";
 import { ChevronRight } from "lucide-react";
 import { LiveInfoPage } from "@/components/LiveInfoPage";
 
@@ -16,21 +15,23 @@ const ELEC_LEVEL_DOT = {
 };
 
 export function LiveInfoTile() {
-  const { settings } = useSettings();
-  const { weather, departuresTo, departuresFrom, electricity } = useLiveInfo();
+  const { weather, routeDepartures, electricity } = useLiveInfo();
   const [open, setOpen] = useState(false);
 
-  const stopB = settings.commuteStopB;
-
   // Don't render if there's nothing to show
-  if (!weather && departuresTo.length === 0 && departuresFrom.length === 0 && !electricity) return null;
+  if (!weather && routeDepartures.length === 0 && !electricity) return null;
 
   // Build the one-line summary shown in the tile
   const summaryParts: string[] = [];
-  if (weather)           summaryParts.push(`${weather.emoji} ${weather.temp}°C · ${weather.label}`);
-  if (departuresTo[0])   summaryParts.push(`🚌 ${minuteLabel(departuresTo[0].minutes)} → ${stopB}`);
-  if (departuresFrom[0]) summaryParts.push(`🚌 ${minuteLabel(departuresFrom[0].minutes)} from ${stopB}`);
-  if (electricity)       summaryParts.push(`⚡ ${electricity.priceNow} öre`);
+  if (weather) summaryParts.push(`${weather.emoji} ${weather.temp}°C · ${weather.label}`);
+
+  // Show first departure of first route
+  const firstRoute = routeDepartures[0];
+  if (firstRoute && firstRoute.minutes.length > 0) {
+    summaryParts.push(`🚌 ${minuteLabel(firstRoute.minutes[0])} → ${firstRoute.route.toStop.split(" (")[0]}`);
+  }
+
+  if (electricity) summaryParts.push(`⚡ ${electricity.priceNow} öre`);
 
   return (
     <>

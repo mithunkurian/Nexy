@@ -1,11 +1,12 @@
 // SL bus departures via Trafiklab ResRobot API
 // Free API key from trafiklab.se → create account → add "ResRobot" product
 
-export interface DepartureInfo {
-  line: string;
-  direction: string;
-  minutes: number;
-  isRealTime: boolean;
+import type { TransitRoute } from "@/lib/settings";
+
+export interface RouteDeparture {
+  route: TransitRoute;
+  minutes: number[];   // up to 4 departure times in minutes from now
+  lineName: string;    // e.g. "Länstrafik Bus 705"
 }
 
 // In-memory cache of stop name → extId to avoid repeated lookups
@@ -30,48 +31,61 @@ async function lookupStopId(name: string, apiKey: string): Promise<string | null
   return stops[0].extId;
 }
 
-export async function fetchDepartures(
-  stopName: string,
+export async function fetchRouteDepartures(
+  routes: TransitRoute[],
   apiKey: string,
-): Promise<DepartureInfo[]> {
-  try {
-    const stopId = await lookupStopId(stopName, apiKey);
-    if (!stopId) return [];
+): Promise<RouteDeparture[]> {
+  const results: RouteDeparture[] = [];
 
-    const res = await fetch(
-      `https://api.resrobot.se/v2.1/departureBoard?id=${stopId}&format=json&accessId=${apiKey}&maxJourneys=5`,
-    );
-    if (!res.ok) return [];
+  for (const route of routes) {
+    try {
+      const stopId = await lookupStopId(route.fromStop, apiKey);
+      if (!stopId) {
+        results.push({ route, minutes: [], lineName: route.lineFilter });
+        continue;
+      }
 
-    const data = await res.json();
-    const departures: {
-      name: string;
-      direction: string;
-      time: string;
-      date: string;
-      rtTime?: string;
-      rtDate?: string;
-    }[] = data.Departure ?? [];
+      const res = await fetch(
+        `https://api.resrobot.se/v2.1/departureBoard?id=${stopId}&format=json&accessId=${apiKey}&maxJourneys=30`,
+      );
+      if (!res.ok) {
+        results.push({ route, minutes: [], lineName: route.lineFilter });
+        continue;
+      }
 
-    const now = new Date();
+      const data = await res.json();
+      const allDeps: {
+        name: string;
+        direction: string;
+        time: string;
+        date: string;
+        rtTime?: string;
+        rtDate?: string;
+      }[] = data.Departure ?? [];
 
-    return departures.slice(0, 5).map((dep) => {
-      const timeStr = dep.rtTime ?? dep.time;
-      const dateStr = dep.rtDate ?? dep.date;
-      const [h, m] = timeStr.split(":").map(Number);
-      const depDate = new Date(dateStr);
-      depDate.setHours(h, m, 0, 0);
-      const diffMs = depDate.getTime() - now.getTime();
-      const minutes = Math.max(0, Math.round(diffMs / 60_000));
+      // Filter by line number (dep.name contains e.g. "Länstrafik Bus 705")
+      const filtered = allDeps.filter((dep) =>
+        dep.name.toLowerCase().includes(route.lineFilter.toLowerCase()),
+      );
 
-      return {
-        line: dep.name,
-        direction: dep.direction,
-        minutes,
-        isRealTime: !!dep.rtTime,
-      };
-    });
-  } catch {
-    return [];
+      const lineName = filtered.length > 0 ? filtered[0].name : route.lineFilter;
+
+      const now = new Date();
+      const minutes = filtered.slice(0, 4).map((dep) => {
+        const timeStr = dep.rtTime ?? dep.time;
+        const dateStr = dep.rtDate ?? dep.date;
+        const [h, m] = timeStr.split(":").map(Number);
+        const depDate = new Date(dateStr);
+        depDate.setHours(h, m, 0, 0);
+        const diffMs = depDate.getTime() - now.getTime();
+        return Math.max(0, Math.round(diffMs / 60_000));
+      });
+
+      results.push({ route, minutes, lineName });
+    } catch {
+      results.push({ route, minutes: [], lineName: route.lineFilter });
+    }
   }
+
+  return results;
 }

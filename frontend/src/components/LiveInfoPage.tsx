@@ -1,10 +1,9 @@
 "use client";
 import { useEffect } from "react";
-import { X, Wind, Thermometer, Bus, Zap, Sun, Sunrise, Sunset, Calendar, MapPin, ChevronRight } from "lucide-react";
+import { X, Wind, Thermometer, Bus, Zap, Sun, Sunrise, Sunset, Calendar, MapPin, ChevronRight, Train } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useLiveInfo } from "@/hooks/useLiveInfo";
-import { useSettings } from "@/contexts/SettingsContext";
 import { formatEventTime } from "@/lib/calendar";
 import { useLandscape } from "@/hooks/useLandscape";
 
@@ -88,10 +87,7 @@ function DaylightBar({ sunrise, sunset }: { sunrise: string; sunset: string }) {
 // ── Main modal ────────────────────────────────────────────────────────────────
 export function LiveInfoPage({ onClose }: Props) {
   const landscape = useLandscape();
-  const { weather, departuresTo, departuresFrom, electricity, calendarEvents } = useLiveInfo();
-  const { settings } = useSettings();
-  const stopA = settings.commuteStopA;
-  const stopB = settings.commuteStopB;
+  const { weather, routeDepartures, electricity, calendarEvents } = useLiveInfo();
   const currentHour = new Date().getHours();
 
   useEffect(() => {
@@ -178,41 +174,47 @@ export function LiveInfoPage({ onClose }: Props) {
     <Card>
       <CardHeader icon={Bus} title="Transit" color="bg-violet-500" />
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
-        {departuresTo.length > 0 && stopB && (
-          <div className="px-4 py-3">
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">→ {stopB}</p>
-            <div className="space-y-2">
-              {departuresTo.slice(0, 4).map((d, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[60%]">{d.line}{d.direction ? ` · ${d.direction}` : ""}</span>
-                  <span className={cn("px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0", i === 0 ? "bg-violet-500 text-white" : "bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300")}>
-                    {minuteLabel(d.minutes)}
-                  </span>
+        {routeDepartures.length > 0 ? routeDepartures.map((rd) => {
+          // Detect bus vs train from line name
+          const isTrain = rd.lineName.toLowerCase().includes("tåg") || rd.lineName.toLowerCase().includes("train") || rd.lineName.toLowerCase().includes("pendel");
+          const RouteIcon = isTrain ? Train : Bus;
+          return (
+            <div key={rd.route.id} className="px-4 py-3">
+              {/* Route header */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <RouteIcon size={11} className="text-violet-400 flex-shrink-0" />
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">
+                  {rd.route.fromStop} → {rd.route.toStop}
+                </span>
+              </div>
+              {/* Line name + departure pills */}
+              {rd.minutes.length > 0 ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 mr-1">{rd.lineName}:</span>
+                  {rd.minutes.map((min, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0",
+                        i === 0
+                          ? "bg-violet-500 text-white"
+                          : "bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300",
+                      )}
+                    >
+                      {minuteLabel(min)}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-500">No departures found</p>
+              )}
             </div>
-          </div>
-        )}
-        {departuresFrom.length > 0 && stopA && (
-          <div className="px-4 py-3">
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">← {stopA}</p>
-            <div className="space-y-2">
-              {departuresFrom.slice(0, 4).map((d, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[60%]">{d.line}{d.direction ? ` · ${d.direction}` : ""}</span>
-                  <span className={cn("px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0", i === 0 ? "bg-indigo-500 text-white" : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300")}>
-                    {minuteLabel(d.minutes)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {departuresTo.length === 0 && departuresFrom.length === 0 && (
+          );
+        }) : (
           <div className="px-4 py-5 text-center">
-            <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">No transit data</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">No transit routes configured</p>
             <Link href="/settings" onClick={onClose} className="text-xs text-blue-500 flex items-center gap-0.5 justify-center hover:underline">
-              Configure stops in Settings <ChevronRight size={11} />
+              Add routes in Settings <ChevronRight size={11} />
             </Link>
           </div>
         )}

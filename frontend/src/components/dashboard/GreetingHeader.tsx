@@ -31,7 +31,7 @@ function minuteLabel(min: number): string {
 export function GreetingHeader() {
   const { settings } = useSettings();
   const [now, setNow] = useState<Date | null>(null);
-  const { weather, departuresTo, departuresFrom } = useLiveInfo();
+  const { weather, routeDepartures } = useLiveInfo();
 
   useEffect(() => {
     setNow(new Date());
@@ -58,9 +58,8 @@ export function GreetingHeader() {
     month: "long",
   });
 
-  const nextTo   = departuresTo[0];
-  const nextFrom = departuresFrom[0];
-  const stopB    = settings.commuteStopB;
+  // Show first departure of first configured route in the greeting strip
+  const firstRoute = routeDepartures[0];
 
   return (
     <div
@@ -99,8 +98,8 @@ export function GreetingHeader() {
           )}
         </div>
 
-        {/* Live info strip — weather + bus in one line */}
-        {(weather || nextTo || nextFrom) && (
+        {/* Live info strip — weather + first route departure */}
+        {(weather || firstRoute) && (
           <div className="flex items-center gap-3 flex-wrap mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/10 text-xs text-gray-600 dark:text-gray-400">
             {/* Weather */}
             {weather && (
@@ -111,30 +110,16 @@ export function GreetingHeader() {
               </span>
             )}
 
-            {/* Bus to destination */}
-            {nextTo && stopB && (
+            {/* First configured route */}
+            {firstRoute && firstRoute.minutes.length > 0 && (
               <>
                 {weather && <span className="text-gray-300 dark:text-gray-600 select-none">·</span>}
                 <span className="flex items-center gap-1">
                   <span>🚌</span>
                   <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    {minuteLabel(nextTo.minutes)}
+                    {minuteLabel(firstRoute.minutes[0])}
                   </span>
-                  <span className="text-gray-400">→ {stopB}</span>
-                </span>
-              </>
-            )}
-
-            {/* Bus from destination */}
-            {nextFrom && stopB && (
-              <>
-                <span className="text-gray-300 dark:text-gray-600 select-none">·</span>
-                <span className="flex items-center gap-1">
-                  <span>🚌</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    {minuteLabel(nextFrom.minutes)}
-                  </span>
-                  <span className="text-gray-400">from {stopB}</span>
+                  <span className="text-gray-400">→ {firstRoute.route.toStop.split(" (")[0]}</span>
                 </span>
               </>
             )}
