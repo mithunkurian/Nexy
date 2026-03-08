@@ -47,26 +47,28 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   const [hovered, setHovered] = useState<number | null>(null);
   if (hourly.length < 2) return null;
 
-  const W      = 600;
-  const PAD_X  = 20;
-  const PAD_T  = 92;   // room for 24px emoji + 18px temp label + gaps above the curve
-  const CH     = 100;  // curve drawing area height
-  const PAD_B  = 36;   // space for hour labels below curve
-  const TOTAL  = PAD_T + CH + PAD_B;
-  const EMOJI_Y    = 28;        // emoji baseline (fixed row)
-  const TEMP_Y_MIN = PAD_T - 18; // temp label never goes above this
+  const W         = 620;
+  const PAD_LEFT  = 38;  // Y-axis label column
+  const PAD_RIGHT = 10;
+  const PAD_T     = 88;  // room for emoji row + floating temp labels
+  const CH        = 96;  // curve drawing area
+  const PAD_B     = 34;  // hour labels
+  const TOTAL     = PAD_T + CH + PAD_B;  // 218
+  const EMOJI_Y   = 26;
+  const TEMP_Y_MIN = PAD_T - 16;
 
   const temps = hourly.map((h) => h.temp);
   const minT  = Math.min(...temps);
   const maxT  = Math.max(...temps);
   const range = maxT - minT || 1;
   const n     = hourly.length;
-  const stepX = (W - PAD_X * 2) / (n - 1);
+  const chartW = W - PAD_LEFT - PAD_RIGHT;
+  const stepX  = chartW / (n - 1);
 
   const toY = (t: number) => PAD_T + CH - ((t - minT) / range) * (CH - 20) - 10;
 
   const pts = hourly.map((h, i) => ({
-    x: PAD_X + i * stepX,
+    x: PAD_LEFT + i * stepX,
     y: toY(h.temp),
     temp: h.temp,
     hour: h.hour,
@@ -80,108 +82,141 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   }
   const fillPath = linePath + ` L ${pts[n - 1].x} ${TOTAL - PAD_B + 2} L ${pts[0].x} ${TOTAL - PAD_B + 2} Z`;
 
+  // Y-axis gridline temperatures: max, mid, min (deduplicated)
+  const gridTemps = [...new Set([maxT, Math.round((maxT + minT) / 2), minT])];
+
   // Tooltip geometry
   const TW = 76; const TH = 96;
-  const hp = hovered !== null ? pts[hovered] : null;
-  const ttX = hp ? Math.max(2, Math.min(W - TW - 2, hp.x - TW / 2)) : 0;
+  const hp  = hovered !== null ? pts[hovered] : null;
+  const ttX = hp ? Math.max(PAD_LEFT, Math.min(W - PAD_RIGHT - TW, hp.x - TW / 2)) : 0;
   const ttY = hp ? Math.max(2, hp.y - TH - 18) : 0;
 
   return (
-    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "14rem" }} aria-hidden>
-      <defs>
-        <linearGradient id="tcGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
-        </linearGradient>
-        <filter id="ttShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="black" floodOpacity="0.12" />
-        </filter>
-      </defs>
+    // aspect-ratio wrapper: chart fills full card width, height scales naturally
+    <div style={{ aspectRatio: `${W} / ${TOTAL}` }} className="w-full">
+      <svg viewBox={`0 0 ${W} ${TOTAL}`} width="100%" height="100%" aria-hidden>
+        <defs>
+          <linearGradient id="tcGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+          </linearGradient>
+          <filter id="ttShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="black" floodOpacity="0.12" />
+          </filter>
+        </defs>
 
-      {/* Gradient fill + curve */}
-      <path d={fillPath} fill="url(#tcGrad)" />
-      <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {/* ── Y-axis gridlines + labels ── */}
+        {gridTemps.map((t) => {
+          const gy = toY(t);
+          return (
+            <g key={t}>
+              {/* Gridline spans full width from just after label to right edge */}
+              <line
+                x1={PAD_LEFT} y1={gy} x2={W - PAD_RIGHT} y2={gy}
+                className="stroke-gray-100 dark:stroke-gray-700"
+                strokeWidth="1" strokeDasharray="3 5"
+              />
+              {/* Y-axis label — right-aligned before the chart area */}
+              <text
+                x={PAD_LEFT - 5} y={gy + 4}
+                textAnchor="end" fontSize="11"
+                className="fill-gray-400 dark:fill-gray-500"
+              >
+                {t}°
+              </text>
+            </g>
+          );
+        })}
 
-      {/* "Now" dashed marker */}
-      <line x1={pts[0].x} y1={EMOJI_Y + 6} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.45" />
+        {/* ── Gradient fill + curve ── */}
+        <path d={fillPath} fill="url(#tcGrad)" />
+        <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
-      {/* Data points */}
-      {pts.map((p, i) => {
-        const labelY  = Math.max(p.y - 10, TEMP_Y_MIN);
-        const hourStr = i === 0 ? "Now" : `${String(p.hour).padStart(2, "0")}:00`;
-        const isHov   = hovered === i;
-        return (
-          <g
-            key={i}
-            onPointerEnter={() => setHovered(i)}
-            onPointerLeave={() => setHovered(null)}
-            style={{ cursor: "default" }}
-          >
-            {/* Wide transparent hit area per column */}
-            <rect x={p.x - stepX / 2} y={0} width={stepX} height={TOTAL} fill="transparent" />
-            {/* Emoji — fixed top row */}
-            <text x={p.x} y={EMOJI_Y} textAnchor="middle" fontSize="22" className="select-none">
-              {p.emoji}
-            </text>
-            {/* Temperature */}
-            <text
-              x={p.x} y={labelY}
-              textAnchor="middle" fontSize="16" fontWeight="700"
-              className={isHov ? "fill-sky-500" : "fill-gray-800 dark:fill-gray-100"}
+        {/* ── "Now" fixed dashed marker ── */}
+        <line
+          x1={pts[0].x} y1={EMOJI_Y + 6} x2={pts[0].x} y2={TOTAL - PAD_B}
+          stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.45"
+        />
+
+        {/* ── Hover: full-height vertical dotted line (behind data points) ── */}
+        {hp && (
+          <line
+            x1={hp.x} y1={4} x2={hp.x} y2={TOTAL - PAD_B}
+            stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.55"
+            style={{ pointerEvents: "none" }}
+          />
+        )}
+
+        {/* ── Data points ── */}
+        {pts.map((p, i) => {
+          const labelY  = Math.max(p.y - 10, TEMP_Y_MIN);
+          const hourStr = i === 0 ? "Now" : `${String(p.hour).padStart(2, "0")}:00`;
+          const isHov   = hovered === i;
+          return (
+            <g
+              key={i}
+              onPointerEnter={() => setHovered(i)}
+              onPointerLeave={() => setHovered(null)}
+              style={{ cursor: "default" }}
             >
-              {p.temp}°
+              {/* Hit area */}
+              <rect
+                x={Math.max(0, p.x - stepX / 2)} y={0}
+                width={stepX} height={TOTAL} fill="transparent"
+              />
+              {/* Emoji */}
+              <text x={p.x} y={EMOJI_Y} textAnchor="middle" fontSize="22" className="select-none">
+                {p.emoji}
+              </text>
+              {/* Temperature label */}
+              <text
+                x={p.x} y={labelY}
+                textAnchor="middle" fontSize="16" fontWeight="700"
+                className={isHov ? "fill-sky-500" : "fill-gray-800 dark:fill-gray-100"}
+              >
+                {p.temp}°
+              </text>
+              {/* Dot */}
+              {isHov ? (
+                <circle cx={p.x} cy={p.y} r="6" fill="#0ea5e9" />
+              ) : i === 0 ? (
+                <circle cx={p.x} cy={p.y} r="5" fill="#0ea5e9" />
+              ) : (
+                <circle cx={p.x} cy={p.y} r="3" fill="#38bdf8" opacity="0.85" />
+              )}
+              {/* Hour label */}
+              <text
+                x={p.x} y={TOTAL - 7}
+                textAnchor="middle" fontSize="13"
+                className={isHov ? "fill-sky-500" : "fill-gray-400 dark:fill-gray-500"}
+              >
+                {hourStr}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* ── Hover tooltip (top layer) ── */}
+        {hp !== null && hovered !== null && (
+          <g style={{ pointerEvents: "none" }}>
+            <rect
+              x={ttX} y={ttY} width={TW} height={TH} rx="10"
+              className="fill-white dark:fill-gray-800 stroke-gray-200 dark:stroke-gray-700"
+              strokeWidth="1" filter="url(#ttShadow)"
+            />
+            <text x={ttX + TW / 2} y={ttY + 20} textAnchor="middle" fontSize="13" fontWeight="600" className="fill-gray-500 dark:fill-gray-400">
+              {hovered === 0 ? "Now" : `${String(hp.hour).padStart(2, "0")}:00`}
             </text>
-            {/* Dot on curve */}
-            {isHov ? (
-              <circle cx={p.x} cy={p.y} r="6" fill="#0ea5e9" />
-            ) : i === 0 ? (
-              <circle cx={p.x} cy={p.y} r="5" fill="#0ea5e9" />
-            ) : (
-              <circle cx={p.x} cy={p.y} r="3" fill="#38bdf8" opacity="0.85" />
-            )}
-            {/* Hour label */}
-            <text
-              x={p.x} y={TOTAL - 7}
-              textAnchor="middle" fontSize="13"
-              className={isHov ? "fill-sky-500 font-semibold" : "fill-gray-400 dark:fill-gray-500"}
-            >
-              {hourStr}
+            <text x={ttX + TW / 2} y={ttY + 54} textAnchor="middle" fontSize="26" className="select-none">
+              {hp.emoji}
+            </text>
+            <text x={ttX + TW / 2} y={ttY + 82} textAnchor="middle" fontSize="22" fontWeight="700" className="fill-gray-900 dark:fill-gray-100">
+              {hp.temp}°
             </text>
           </g>
-        );
-      })}
-
-      {/* Hover tooltip — rendered on top, no pointer events */}
-      {hp !== null && hovered !== null && (
-        <g style={{ pointerEvents: "none" }}>
-          {/* Dashed line from tooltip bottom to dot */}
-          <line
-            x1={hp.x} y1={ttY + TH + 2}
-            x2={hp.x} y2={hp.y - 6}
-            stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7"
-          />
-          {/* Card background */}
-          <rect
-            x={ttX} y={ttY} width={TW} height={TH} rx="10"
-            className="fill-white dark:fill-gray-800 stroke-gray-200 dark:stroke-gray-700"
-            strokeWidth="1"
-            filter="url(#ttShadow)"
-          />
-          {/* Hour */}
-          <text x={ttX + TW / 2} y={ttY + 20} textAnchor="middle" fontSize="13" fontWeight="600" className="fill-gray-500 dark:fill-gray-400">
-            {hovered === 0 ? "Now" : `${String(hp.hour).padStart(2, "0")}:00`}
-          </text>
-          {/* Emoji */}
-          <text x={ttX + TW / 2} y={ttY + 54} textAnchor="middle" fontSize="26" className="select-none">
-            {hp.emoji}
-          </text>
-          {/* Temperature */}
-          <text x={ttX + TW / 2} y={ttY + 82} textAnchor="middle" fontSize="22" fontWeight="700" className="fill-gray-900 dark:fill-gray-100">
-            {hp.temp}°
-          </text>
-        </g>
-      )}
-    </svg>
+        )}
+      </svg>
+    </div>
   );
 }
 
