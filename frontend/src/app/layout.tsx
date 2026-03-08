@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { BottomNav } from "@/components/BottomNav";
+import { LayoutShell } from "@/components/LayoutShell";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 
 export const metadata: Metadata = {
@@ -14,15 +14,15 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col transition-colors">
+      <body className="bg-gray-50 dark:bg-gray-950 transition-colors">
         <SettingsProvider>
-          <main className="flex-1 pb-24">{children}</main>
-          <BottomNav />
+          <LayoutShell>{children}</LayoutShell>
         </SettingsProvider>
       </body>
     </html>

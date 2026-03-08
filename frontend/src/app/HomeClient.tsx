@@ -1,4 +1,6 @@
 "use client";
+import { useLandscape } from "@/hooks/useLandscape";
+import KioskDashboard from "@/components/dashboard/KioskDashboard";
 import { useDevices } from "@/hooks/useDevices";
 import { GreetingHeader } from "@/components/dashboard/GreetingHeader";
 import { HomeStatusBanner } from "@/components/dashboard/HomeStatusBanner";
@@ -12,6 +14,16 @@ import { Loader2 } from "lucide-react";
 import { VERSION_LABEL } from "@/lib/version";
 
 export default function HomeClient() {
+  const landscape = useLandscape();
+
+  // Landscape → kiosk view (no scroll, two-column tablet layout)
+  if (landscape) return <KioskDashboard />;
+
+  // Portrait → original phone layout (unchanged)
+  return <PortraitDashboard />;
+}
+
+function PortraitDashboard() {
   const { devices, rooms, loading } = useDevices();
 
   return (
