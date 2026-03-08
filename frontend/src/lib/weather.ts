@@ -110,6 +110,7 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
     const { latitude, longitude, name } = geoResult;
 
     // Fetch current + hourly + daily in one request
+    // forecast_days=2 so we always have 12 h ahead even late at night
     const wxRes = await fetch(
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${latitude}&longitude=${longitude}` +
@@ -117,7 +118,7 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
       `&hourly=temperature_2m,weather_code` +
       `&daily=sunrise,sunset` +
       `&timezone=auto` +
-      `&forecast_days=1`,
+      `&forecast_days=2`,
     );
     if (!wxRes.ok) return null;
     const wx = await wxRes.json();

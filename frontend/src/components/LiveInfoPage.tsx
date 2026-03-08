@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useLiveInfo } from "@/hooks/useLiveInfo";
 import { formatEventTime } from "@/lib/calendar";
 import { useLandscape } from "@/hooks/useLandscape";
+import type { HourlyForecast } from "@/lib/weather";
 
 interface Props {
   onClose: () => void;
@@ -38,6 +39,92 @@ function CardHeader({ icon: Icon, title, color }: { icon: React.ElementType; tit
       </div>
       <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">{title}</span>
     </div>
+  );
+}
+
+// ── Temperature curve chart ───────────────────────────────────────────────────
+function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
+  if (hourly.length < 2) return null;
+
+  const W      = 600;
+  const PAD_X  = 18;
+  const PAD_T  = 52;   // space above curve: emoji row + temp label
+  const CH     = 60;   // height of the curve drawing area
+  const PAD_B  = 24;   // space below curve for hour labels
+  const TOTAL  = PAD_T + CH + PAD_B;
+
+  const temps  = hourly.map((h) => h.temp);
+  const minT   = Math.min(...temps);
+  const maxT   = Math.max(...temps);
+  const range  = maxT - minT || 1;
+  const n      = hourly.length;
+  const stepX  = (W - PAD_X * 2) / (n - 1);
+
+  // Map temperature to Y within the curve area
+  const toY = (t: number) => PAD_T + CH - ((t - minT) / range) * (CH - 12) - 6;
+
+  const pts = hourly.map((h, i) => ({
+    x: PAD_X + i * stepX,
+    y: toY(h.temp),
+    temp: h.temp,
+    hour: h.hour,
+    emoji: h.emoji,
+  }));
+
+  // Smooth cubic bezier path
+  let linePath = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const cx = (pts[i + 1].x - pts[i].x) * 0.45;
+    linePath += ` C ${pts[i].x + cx} ${pts[i].y} ${pts[i + 1].x - cx} ${pts[i + 1].y} ${pts[i + 1].x} ${pts[i + 1].y}`;
+  }
+  const fillPath = linePath + ` L ${pts[pts.length - 1].x} ${TOTAL - PAD_B + 2} L ${pts[0].x} ${TOTAL - PAD_B + 2} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "9rem" }} aria-hidden>
+      <defs>
+        <linearGradient id="tcGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Gradient fill under the curve */}
+      <path d={fillPath} fill="url(#tcGrad)" />
+
+      {/* Curve line */}
+      <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Dashed "now" marker */}
+      <line x1={pts[0].x} y1={PAD_T - 16} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.5" />
+
+      {pts.map((p, i) => {
+        // Keep temp label from overlapping with emoji row (min y = 30)
+        const labelY = Math.max(p.y - 6, 30);
+        const hourStr = i === 0 ? "Now" : `${String(p.hour).padStart(2, "0")}:00`;
+        return (
+          <g key={i}>
+            {/* Weather emoji — fixed top row */}
+            <text x={p.x} y={17} textAnchor="middle" fontSize="13" className="select-none">
+              {p.emoji}
+            </text>
+            {/* Temperature label — just above dot, clamped below emoji */}
+            <text x={p.x} y={labelY} textAnchor="middle" fontSize="11" fontWeight="600" className="fill-gray-800 dark:fill-gray-100">
+              {p.temp}°
+            </text>
+            {/* Dot on the curve */}
+            {i === 0 ? (
+              <circle cx={p.x} cy={p.y} r="4" fill="#0ea5e9" />
+            ) : (
+              <circle cx={p.x} cy={p.y} r="2.5" fill="#38bdf8" opacity="0.8" />
+            )}
+            {/* Hour label */}
+            <text x={p.x} y={TOTAL - 5} textAnchor="middle" fontSize="10" className="fill-gray-400 dark:fill-gray-500">
+              {hourStr}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -132,27 +219,13 @@ export function LiveInfoPage({ onClose }: Props) {
           </div>
         </div>
 
-        {/* Hourly forecast strip */}
+        {/* Temperature curve chart */}
         {weather.hourly.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
               Next {weather.hourly.length} hours
             </p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {weather.hourly.map((h, i) => (
-                <div
-                  key={h.hour}
-                  className={cn(
-                    "flex flex-col items-center gap-1 flex-shrink-0 rounded-xl px-3 py-2.5 min-w-[52px]",
-                    i === 0 ? "bg-sky-500 text-white" : "bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300",
-                  )}
-                >
-                  <span className="text-[10px] font-medium opacity-70">{i === 0 ? "Now" : `${h.hour}:00`}</span>
-                  <span className="text-base leading-none">{h.emoji}</span>
-                  <span className="text-sm font-semibold">{h.temp}°</span>
-                </div>
-              ))}
-            </div>
+            <TempCurveChart hourly={weather.hourly} />
           </div>
         )}
 
