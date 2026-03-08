@@ -85,8 +85,13 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   // Y-axis gridline temperatures: max, mid, min (deduplicated)
   const gridTemps = [...new Set([maxT, Math.round((maxT + minT) / 2), minT])];
 
+  // Precipitation bars (Option B)
+  const PREC_Y  = TOTAL - PAD_B + 2;  // top of bar zone (just below curve baseline)
+  const PREC_H  = 14;                 // max bar height
+  const BAR_W   = Math.min(stepX - 4, 14);
+
   // Tooltip geometry
-  const TW = 76; const TH = 96;
+  const TW = 76; const TH = 112;
   const hp  = hovered !== null ? pts[hovered] : null;
   const ttX = hp ? Math.max(PAD_LEFT, Math.min(W - PAD_RIGHT - TW, hp.x - TW / 2)) : 0;
   const ttY = hp ? Math.max(2, hp.y - TH - 18) : 0;
@@ -137,6 +142,23 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
           x1={pts[0].x} y1={EMOJI_Y + 6} x2={pts[0].x} y2={TOTAL - PAD_B}
           stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.45"
         />
+
+        {/* ── Precipitation bars (Option B) ── */}
+        {pts.map((p, i) => {
+          const prec = hourly[i].precipitation;
+          if (prec <= 0) return null;
+          const bh = Math.max(2, (prec / 100) * PREC_H);
+          const isHigh = prec >= 50;
+          return (
+            <rect
+              key={i}
+              x={p.x - BAR_W / 2} y={PREC_Y}
+              width={BAR_W} height={bh} rx="2"
+              className={isHigh ? "fill-sky-400" : "fill-sky-200 dark:fill-sky-700"}
+              opacity="0.85"
+            />
+          );
+        })}
 
         {/* ── Hover: full-height vertical dotted line (behind data points) ── */}
         {hp && (
@@ -212,6 +234,9 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
             </text>
             <text x={ttX + TW / 2} y={ttY + 82} textAnchor="middle" fontSize="22" fontWeight="700" className="fill-gray-900 dark:fill-gray-100">
               {hp.temp}°
+            </text>
+            <text x={ttX + TW / 2} y={ttY + 101} textAnchor="middle" fontSize="11" className="fill-sky-500">
+              💧 {hourly[hovered].precipitation}%
             </text>
           </g>
         )}

@@ -28,9 +28,10 @@ const WMO: Record<number, { label: string; emoji: string }> = {
 };
 
 export interface HourlyForecast {
-  hour: number;   // 0-23
+  hour: number;        // 0-23
   temp: number;
   emoji: string;
+  precipitation: number; // 0-100 (%)
 }
 
 export interface WeatherData {
@@ -115,7 +116,7 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${latitude}&longitude=${longitude}` +
       `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m` +
-      `&hourly=temperature_2m,weather_code` +
+      `&hourly=temperature_2m,weather_code,precipitation_probability` +
       `&daily=sunrise,sunset` +
       `&timezone=auto` +
       `&forecast_days=2`,
@@ -129,8 +130,9 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
 
     // ── Hourly (next 12h from now) ────────────────────────────────────────────
     const nowHour = new Date().getHours();
-    const rawTemps: number[]  = wx.hourly?.temperature_2m ?? [];
-    const rawCodes: number[]  = wx.hourly?.weather_code   ?? [];
+    const rawTemps: number[]  = wx.hourly?.temperature_2m         ?? [];
+    const rawCodes: number[]  = wx.hourly?.weather_code            ?? [];
+    const rawPrec:  number[]  = wx.hourly?.precipitation_probability ?? [];
 
     const hourly: HourlyForecast[] = [];
     for (let i = 0; i < 12; i++) {
@@ -141,6 +143,7 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
         hour: idx % 24,
         temp: Math.round(rawTemps[idx]),
         emoji: (WMO[code] ?? WMO[0]).emoji,
+        precipitation: rawPrec[idx] ?? 0,
       });
     }
 
