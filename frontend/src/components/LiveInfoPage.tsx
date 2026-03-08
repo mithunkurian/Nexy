@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { X, Wind, Thermometer, Bus, Zap, Sun, Sunrise, Sunset, Calendar, MapPin, ChevronRight, Train } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -44,26 +44,25 @@ function CardHeader({ icon: Icon, title, color }: { icon: React.ElementType; tit
 
 // ── Temperature curve chart ───────────────────────────────────────────────────
 function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
+  const [hovered, setHovered] = useState<number | null>(null);
   if (hourly.length < 2) return null;
 
   const W      = 600;
   const PAD_X  = 20;
-  const PAD_T  = 72;   // emoji row (20) + gap (10) + temp label (~14) + gap to curve (~28)
-  const CH     = 90;   // taller curve drawing area
-  const PAD_B  = 32;   // space below curve for hour labels
+  const PAD_T  = 92;   // room for 24px emoji + 18px temp label + gaps above the curve
+  const CH     = 100;  // curve drawing area height
+  const PAD_B  = 36;   // space for hour labels below curve
   const TOTAL  = PAD_T + CH + PAD_B;
+  const EMOJI_Y    = 28;        // emoji baseline (fixed row)
+  const TEMP_Y_MIN = PAD_T - 18; // temp label never goes above this
 
-  const EMOJI_Y  = 20;   // baseline of emoji text
-  const TEMP_Y_MIN = PAD_T - 14; // minimum y for temp label (below emoji row)
+  const temps = hourly.map((h) => h.temp);
+  const minT  = Math.min(...temps);
+  const maxT  = Math.max(...temps);
+  const range = maxT - minT || 1;
+  const n     = hourly.length;
+  const stepX = (W - PAD_X * 2) / (n - 1);
 
-  const temps  = hourly.map((h) => h.temp);
-  const minT   = Math.min(...temps);
-  const maxT   = Math.max(...temps);
-  const range  = maxT - minT || 1;
-  const n      = hourly.length;
-  const stepX  = (W - PAD_X * 2) / (n - 1);
-
-  // Map temperature to Y — leave 10px margins inside CH
   const toY = (t: number) => PAD_T + CH - ((t - minT) / range) * (CH - 20) - 10;
 
   const pts = hourly.map((h, i) => ({
@@ -74,59 +73,114 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
     emoji: h.emoji,
   }));
 
-  // Smooth cubic bezier path
   let linePath = `M ${pts[0].x} ${pts[0].y}`;
   for (let i = 0; i < pts.length - 1; i++) {
     const cx = (pts[i + 1].x - pts[i].x) * 0.45;
     linePath += ` C ${pts[i].x + cx} ${pts[i].y} ${pts[i + 1].x - cx} ${pts[i + 1].y} ${pts[i + 1].x} ${pts[i + 1].y}`;
   }
-  const fillPath = linePath + ` L ${pts[pts.length - 1].x} ${TOTAL - PAD_B + 2} L ${pts[0].x} ${TOTAL - PAD_B + 2} Z`;
+  const fillPath = linePath + ` L ${pts[n - 1].x} ${TOTAL - PAD_B + 2} L ${pts[0].x} ${TOTAL - PAD_B + 2} Z`;
+
+  // Tooltip geometry
+  const TW = 76; const TH = 96;
+  const hp = hovered !== null ? pts[hovered] : null;
+  const ttX = hp ? Math.max(2, Math.min(W - TW - 2, hp.x - TW / 2)) : 0;
+  const ttY = hp ? Math.max(2, hp.y - TH - 18) : 0;
 
   return (
-    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "12rem" }} aria-hidden>
+    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "14rem" }} aria-hidden>
       <defs>
         <linearGradient id="tcGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
         </linearGradient>
+        <filter id="ttShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="black" floodOpacity="0.12" />
+        </filter>
       </defs>
 
-      {/* Gradient fill under the curve */}
+      {/* Gradient fill + curve */}
       <path d={fillPath} fill="url(#tcGrad)" />
-
-      {/* Curve line */}
       <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
-      {/* Dashed "now" marker */}
-      <line x1={pts[0].x} y1={EMOJI_Y + 4} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.5" />
+      {/* "Now" dashed marker */}
+      <line x1={pts[0].x} y1={EMOJI_Y + 6} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.45" />
 
+      {/* Data points */}
       {pts.map((p, i) => {
-        // Temperature label sits above the dot, but never higher than just below emoji
-        const labelY = Math.max(p.y - 8, TEMP_Y_MIN);
+        const labelY  = Math.max(p.y - 10, TEMP_Y_MIN);
         const hourStr = i === 0 ? "Now" : `${String(p.hour).padStart(2, "0")}:00`;
+        const isHov   = hovered === i;
         return (
-          <g key={i}>
-            {/* Weather emoji — fixed top row */}
-            <text x={p.x} y={EMOJI_Y} textAnchor="middle" fontSize="16" className="select-none">
+          <g
+            key={i}
+            onPointerEnter={() => setHovered(i)}
+            onPointerLeave={() => setHovered(null)}
+            style={{ cursor: "default" }}
+          >
+            {/* Wide transparent hit area per column */}
+            <rect x={p.x - stepX / 2} y={0} width={stepX} height={TOTAL} fill="transparent" />
+            {/* Emoji — fixed top row */}
+            <text x={p.x} y={EMOJI_Y} textAnchor="middle" fontSize="22" className="select-none">
               {p.emoji}
             </text>
-            {/* Temperature label */}
-            <text x={p.x} y={labelY} textAnchor="middle" fontSize="13" fontWeight="700" className="fill-gray-800 dark:fill-gray-100">
+            {/* Temperature */}
+            <text
+              x={p.x} y={labelY}
+              textAnchor="middle" fontSize="16" fontWeight="700"
+              className={isHov ? "fill-sky-500" : "fill-gray-800 dark:fill-gray-100"}
+            >
               {p.temp}°
             </text>
-            {/* Dot on the curve */}
-            {i === 0 ? (
+            {/* Dot on curve */}
+            {isHov ? (
+              <circle cx={p.x} cy={p.y} r="6" fill="#0ea5e9" />
+            ) : i === 0 ? (
               <circle cx={p.x} cy={p.y} r="5" fill="#0ea5e9" />
             ) : (
               <circle cx={p.x} cy={p.y} r="3" fill="#38bdf8" opacity="0.85" />
             )}
             {/* Hour label */}
-            <text x={p.x} y={TOTAL - 6} textAnchor="middle" fontSize="12" className="fill-gray-400 dark:fill-gray-500">
+            <text
+              x={p.x} y={TOTAL - 7}
+              textAnchor="middle" fontSize="13"
+              className={isHov ? "fill-sky-500 font-semibold" : "fill-gray-400 dark:fill-gray-500"}
+            >
               {hourStr}
             </text>
           </g>
         );
       })}
+
+      {/* Hover tooltip — rendered on top, no pointer events */}
+      {hp !== null && hovered !== null && (
+        <g style={{ pointerEvents: "none" }}>
+          {/* Dashed line from tooltip bottom to dot */}
+          <line
+            x1={hp.x} y1={ttY + TH + 2}
+            x2={hp.x} y2={hp.y - 6}
+            stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7"
+          />
+          {/* Card background */}
+          <rect
+            x={ttX} y={ttY} width={TW} height={TH} rx="10"
+            className="fill-white dark:fill-gray-800 stroke-gray-200 dark:stroke-gray-700"
+            strokeWidth="1"
+            filter="url(#ttShadow)"
+          />
+          {/* Hour */}
+          <text x={ttX + TW / 2} y={ttY + 20} textAnchor="middle" fontSize="13" fontWeight="600" className="fill-gray-500 dark:fill-gray-400">
+            {hovered === 0 ? "Now" : `${String(hp.hour).padStart(2, "0")}:00`}
+          </text>
+          {/* Emoji */}
+          <text x={ttX + TW / 2} y={ttY + 54} textAnchor="middle" fontSize="26" className="select-none">
+            {hp.emoji}
+          </text>
+          {/* Temperature */}
+          <text x={ttX + TW / 2} y={ttY + 82} textAnchor="middle" fontSize="22" fontWeight="700" className="fill-gray-900 dark:fill-gray-100">
+            {hp.temp}°
+          </text>
+        </g>
+      )}
     </svg>
   );
 }
