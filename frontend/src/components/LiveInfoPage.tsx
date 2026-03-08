@@ -47,11 +47,14 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   if (hourly.length < 2) return null;
 
   const W      = 600;
-  const PAD_X  = 18;
-  const PAD_T  = 52;   // space above curve: emoji row + temp label
-  const CH     = 60;   // height of the curve drawing area
-  const PAD_B  = 24;   // space below curve for hour labels
+  const PAD_X  = 20;
+  const PAD_T  = 72;   // emoji row (20) + gap (10) + temp label (~14) + gap to curve (~28)
+  const CH     = 90;   // taller curve drawing area
+  const PAD_B  = 32;   // space below curve for hour labels
   const TOTAL  = PAD_T + CH + PAD_B;
+
+  const EMOJI_Y  = 20;   // baseline of emoji text
+  const TEMP_Y_MIN = PAD_T - 14; // minimum y for temp label (below emoji row)
 
   const temps  = hourly.map((h) => h.temp);
   const minT   = Math.min(...temps);
@@ -60,8 +63,8 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   const n      = hourly.length;
   const stepX  = (W - PAD_X * 2) / (n - 1);
 
-  // Map temperature to Y within the curve area
-  const toY = (t: number) => PAD_T + CH - ((t - minT) / range) * (CH - 12) - 6;
+  // Map temperature to Y — leave 10px margins inside CH
+  const toY = (t: number) => PAD_T + CH - ((t - minT) / range) * (CH - 20) - 10;
 
   const pts = hourly.map((h, i) => ({
     x: PAD_X + i * stepX,
@@ -80,10 +83,10 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
   const fillPath = linePath + ` L ${pts[pts.length - 1].x} ${TOTAL - PAD_B + 2} L ${pts[0].x} ${TOTAL - PAD_B + 2} Z`;
 
   return (
-    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "9rem" }} aria-hidden>
+    <svg viewBox={`0 0 ${W} ${TOTAL}`} className="w-full" style={{ height: "12rem" }} aria-hidden>
       <defs>
         <linearGradient id="tcGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
           <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -92,33 +95,33 @@ function TempCurveChart({ hourly }: { hourly: HourlyForecast[] }) {
       <path d={fillPath} fill="url(#tcGrad)" />
 
       {/* Curve line */}
-      <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
       {/* Dashed "now" marker */}
-      <line x1={pts[0].x} y1={PAD_T - 16} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.5" />
+      <line x1={pts[0].x} y1={EMOJI_Y + 4} x2={pts[0].x} y2={TOTAL - PAD_B} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.5" />
 
       {pts.map((p, i) => {
-        // Keep temp label from overlapping with emoji row (min y = 30)
-        const labelY = Math.max(p.y - 6, 30);
+        // Temperature label sits above the dot, but never higher than just below emoji
+        const labelY = Math.max(p.y - 8, TEMP_Y_MIN);
         const hourStr = i === 0 ? "Now" : `${String(p.hour).padStart(2, "0")}:00`;
         return (
           <g key={i}>
             {/* Weather emoji — fixed top row */}
-            <text x={p.x} y={17} textAnchor="middle" fontSize="13" className="select-none">
+            <text x={p.x} y={EMOJI_Y} textAnchor="middle" fontSize="16" className="select-none">
               {p.emoji}
             </text>
-            {/* Temperature label — just above dot, clamped below emoji */}
-            <text x={p.x} y={labelY} textAnchor="middle" fontSize="11" fontWeight="600" className="fill-gray-800 dark:fill-gray-100">
+            {/* Temperature label */}
+            <text x={p.x} y={labelY} textAnchor="middle" fontSize="13" fontWeight="700" className="fill-gray-800 dark:fill-gray-100">
               {p.temp}°
             </text>
             {/* Dot on the curve */}
             {i === 0 ? (
-              <circle cx={p.x} cy={p.y} r="4" fill="#0ea5e9" />
+              <circle cx={p.x} cy={p.y} r="5" fill="#0ea5e9" />
             ) : (
-              <circle cx={p.x} cy={p.y} r="2.5" fill="#38bdf8" opacity="0.8" />
+              <circle cx={p.x} cy={p.y} r="3" fill="#38bdf8" opacity="0.85" />
             )}
             {/* Hour label */}
-            <text x={p.x} y={TOTAL - 5} textAnchor="middle" fontSize="10" className="fill-gray-400 dark:fill-gray-500">
+            <text x={p.x} y={TOTAL - 6} textAnchor="middle" fontSize="12" className="fill-gray-400 dark:fill-gray-500">
               {hourStr}
             </text>
           </g>
