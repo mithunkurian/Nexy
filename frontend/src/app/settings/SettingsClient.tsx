@@ -33,6 +33,8 @@ import {
   Calendar,
   Plus,
   Trash2,
+  AlertCircle,
+  Loader,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VERSION_LABEL } from "@/lib/version";
@@ -209,6 +211,34 @@ export default function SettingsClient() {
   const [addingRoute, setAddingRoute] = useState(false);
   const [newCal, setNewCal] = useState<Omit<CalendarConfig, "id">>({ name: "", calendarId: "", color: "blue" });
   const [addingCal, setAddingCal] = useState(false);
+  const [calValidation, setCalValidation] = useState<Record<string, { status: "checking" | "ok" | "error"; message: string }>>({});
+
+  async function validateCalendar(calId: string, calendarId: string, apiKey: string) {
+    if (!apiKey) {
+      setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "Add your Google API Key below first." } }));
+      return;
+    }
+    setCalValidation((v) => ({ ...v, [calId]: { status: "checking", message: "" } }));
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}?key=${apiKey}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setCalValidation((v) => ({ ...v, [calId]: { status: "ok", message: `Connected — "${data.summary}"` } }));
+      } else if (res.status === 403) {
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "403 — Calendar is private. In Google Calendar → Settings → your calendar → Access permissions → tick \"Make available to public\"." } }));
+      } else if (res.status === 404) {
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "404 — Calendar not found. Check the Calendar ID is correct (usually your Gmail address)." } }));
+      } else if (res.status === 400) {
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "400 — Bad request. Check your API key is valid and has Google Calendar API enabled." } }));
+      } else {
+        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: `Error ${res.status} — check API key restrictions in Google Cloud Console.` } }));
+      }
+    } catch {
+      setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "Network error — could not reach Google." } }));
+    }
+  }
 
   useEffect(() => {
     if (hydrated || synced) setDraft({ ...settings });
@@ -435,25 +465,50 @@ export default function SettingsClient() {
           hint="Add one calendar per person. Each gets a colour so events are easy to tell apart. Shared events show both names."
         >
           <div className="space-y-2">
-            {draft.calendars.map((cal) => (
-              <div
-                key={cal.id}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-              >
-                <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200">{cal.name}</p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{cal.calendarId}</p>
+            {draft.calendars.map((cal) => {
+              const v = calValidation[cal.id];
+              return (
+                <div key={cal.id} className="space-y-1">
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-800 dark:text-gray-200">{cal.name}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{cal.calendarId}</p>
+                    </div>
+                    {/* Test button */}
+                    <button
+                      onClick={() => validateCalendar(cal.id, cal.calendarId, draft.googleCalendarApiKey)}
+                      disabled={v?.status === "checking"}
+                      className="flex-shrink-0 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-[11px] text-gray-500 hover:border-blue-300 hover:text-blue-500 transition-colors disabled:opacity-50"
+                      title="Test connection"
+                    >
+                      {v?.status === "checking" ? <Loader size={11} className="animate-spin" /> : "Test"}
+                    </button>
+                    <button
+                      onClick={() => patch("calendars", draft.calendars.filter((c) => c.id !== cal.id))}
+                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      title="Remove calendar"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  {/* Validation result */}
+                  {v && v.status !== "checking" && (
+                    <div className={cn(
+                      "flex items-start gap-1.5 px-3 py-2 rounded-lg text-[11px] leading-snug",
+                      v.status === "ok"
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                        : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400",
+                    )}>
+                      {v.status === "ok"
+                        ? <CheckCircle size={12} className="flex-shrink-0 mt-0.5" />
+                        : <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />}
+                      <span>{v.message}</span>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => patch("calendars", draft.calendars.filter((c) => c.id !== cal.id))}
-                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  title="Remove calendar"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Add calendar form */}
             {addingCal ? (
