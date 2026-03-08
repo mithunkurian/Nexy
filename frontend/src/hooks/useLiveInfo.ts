@@ -4,12 +4,14 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { fetchWeather, type WeatherData } from "@/lib/weather";
 import { fetchDepartures, type DepartureInfo } from "@/lib/sl";
 import { fetchElectricityPrice, type ElectricityData } from "@/lib/electricity";
+import { fetchCalendarEvents, type CalendarEvent } from "@/lib/calendar";
 
 export interface LiveInfo {
   weather: WeatherData | null;
   departuresTo: DepartureInfo[];    // from home stop → destination
   departuresFrom: DepartureInfo[];  // from destination → home stop
   electricity: ElectricityData | null;
+  calendarEvents: CalendarEvent[];
   loading: boolean;
 }
 
@@ -19,6 +21,7 @@ export function useLiveInfo(): LiveInfo {
   const [departuresTo, setDeparturesTo] = useState<DepartureInfo[]>([]);
   const [departuresFrom, setDeparturesFrom] = useState<DepartureInfo[]>([]);
   const [electricity, setElectricity] = useState<ElectricityData | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +54,18 @@ export function useLiveInfo(): LiveInfo {
         setDeparturesFrom([]);
       }
 
+      // Google Calendar — only when both fields are configured
+      if (settings.googleCalendarId && settings.googleCalendarApiKey) {
+        const events = await fetchCalendarEvents(
+          settings.googleCalendarId,
+          settings.googleCalendarApiKey,
+        );
+        if (cancelled) return;
+        setCalendarEvents(events);
+      } else {
+        setCalendarEvents([]);
+      }
+
       if (!cancelled) setLoading(false);
     }
 
@@ -68,7 +83,9 @@ export function useLiveInfo(): LiveInfo {
     settings.trafiklabApiKey,
     settings.commuteStopA,
     settings.commuteStopB,
+    settings.googleCalendarId,
+    settings.googleCalendarApiKey,
   ]);
 
-  return { weather, departuresTo, departuresFrom, electricity, loading };
+  return { weather, departuresTo, departuresFrom, electricity, calendarEvents, loading };
 }

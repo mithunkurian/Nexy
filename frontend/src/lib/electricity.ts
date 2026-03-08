@@ -1,11 +1,17 @@
 // Swedish electricity prices via elprisetjustnu.se — completely free, no API key
 
+export interface HourlyPrice {
+  hour: number;   // 0-23
+  price: number;  // öre/kWh
+}
+
 export interface ElectricityData {
   priceNow: number;    // öre/kWh
   priceMin: number;    // today's lowest öre/kWh
   priceMax: number;    // today's highest öre/kWh
   zone: string;
   level: "cheap" | "normal" | "expensive";
+  hourlyPrices: HourlyPrice[];  // all 24 hours today
 }
 
 export async function fetchElectricityPrice(
@@ -44,7 +50,12 @@ export async function fetchElectricityPrice(
           ? "expensive"
           : "normal";
 
-    return { priceNow, priceMin, priceMax, zone, level };
+    const hourlyPrices: HourlyPrice[] = prices.map((p, i) => ({
+      hour: i,
+      price: Math.round(p.SEK_per_kWh * 100),
+    }));
+
+    return { priceNow, priceMin, priceMax, zone, level, hourlyPrices };
   } catch {
     return null;
   }

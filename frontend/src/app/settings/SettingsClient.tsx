@@ -25,6 +25,7 @@ import {
   Download,
   Copy,
   Cloud,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VERSION_LABEL } from "@/lib/version";
@@ -421,6 +422,31 @@ export default function SettingsClient() {
           {importError && (
             <p className="text-xs text-red-500 mt-1">{importError}</p>
           )}
+        </Field>
+      </Section>
+
+      {/* Google Calendar */}
+      <Section title="Google Calendar" icon={Calendar}>
+        <Field
+          label="Calendar ID"
+          hint='Your Google Calendar ID — usually your Gmail address, e.g. you@gmail.com. The calendar must be shared publicly or you must use a service account key.'
+        >
+          <TextInput
+            value={draft.googleCalendarId}
+            onChange={(v) => patch("googleCalendarId", v)}
+            placeholder="e.g. you@gmail.com"
+          />
+        </Field>
+        <Field
+          label="Google API Key"
+          hint='A free Google Cloud API key with "Google Calendar API" enabled. Create one at console.cloud.google.com.'
+        >
+          <TextInput
+            value={draft.googleCalendarApiKey}
+            onChange={(v) => patch("googleCalendarApiKey", v)}
+            placeholder="AIza…"
+            type="password"
+          />
         </Field>
       </Section>
 

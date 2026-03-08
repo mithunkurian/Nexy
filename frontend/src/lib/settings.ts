@@ -22,6 +22,10 @@ export interface AppSettings {
   commuteStopB: string;       // Destination stop, e.g. "Huddinge Station"
   trafiklabApiKey: string;    // Free key from trafiklab.se (ResRobot API)
   electricityZone: string;    // SE1 / SE2 / SE3 / SE4 (default SE3 = Stockholm)
+
+  // Google Calendar
+  googleCalendarId: string;   // Calendar ID, e.g. your-email@gmail.com
+  googleCalendarApiKey: string; // Google Cloud API key with Calendar API enabled
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -43,6 +47,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
       ? (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/api/v1/ws")
       : "ws://localhost:8000/api/v1/ws",
   aiProvider: "anthropic",
+  googleCalendarId: "",
+  googleCalendarApiKey: "",
 };
 
 const STORAGE_KEY = "nexy_settings";

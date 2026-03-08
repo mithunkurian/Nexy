@@ -27,6 +27,12 @@ const WMO: Record<number, { label: string; emoji: string }> = {
   99: { label: "Thunderstorm",   emoji: "⛈️" },
 };
 
+export interface HourlyForecast {
+  hour: number;   // 0-23
+  temp: number;
+  emoji: string;
+}
+
 export interface WeatherData {
   temp: number;
   feelsLike: number;
@@ -34,6 +40,10 @@ export interface WeatherData {
   label: string;
   windSpeed: number;
   location: string;
+  hourly: HourlyForecast[];  // next 12 hours
+  sunrise: string;            // e.g. "06:42"
+  sunset: string;             // e.g. "17:38"
+  daylight: number;           // hours of daylight (rounded)
 }
 
 /**
@@ -79,6 +89,11 @@ async function tryGeocode(
   }
 }
 
+/** Parse "2024-03-08T06:42" → "06:42" */
+function parseTime(iso: string): string {
+  return iso.split("T")[1]?.slice(0, 5) ?? "–";
+}
+
 export async function fetchWeather(address: string): Promise<WeatherData | null> {
   try {
     // Try each search term until we get a geocoding result
@@ -94,14 +109,53 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
 
     const { latitude, longitude, name } = geoResult;
 
-    // Fetch current weather
+    // Fetch current + hourly + daily in one request
     const wxRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto`,
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${latitude}&longitude=${longitude}` +
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m` +
+      `&hourly=temperature_2m,weather_code` +
+      `&daily=sunrise,sunset` +
+      `&timezone=auto` +
+      `&forecast_days=1`,
     );
     if (!wxRes.ok) return null;
     const wx = await wxRes.json();
+
+    // ── Current ──────────────────────────────────────────────────────────────
     const c = wx.current;
     const wmo = WMO[c.weather_code as number] ?? { label: "Unknown", emoji: "🌡️" };
+
+    // ── Hourly (next 12h from now) ────────────────────────────────────────────
+    const nowHour = new Date().getHours();
+    const rawTemps: number[]  = wx.hourly?.temperature_2m ?? [];
+    const rawCodes: number[]  = wx.hourly?.weather_code   ?? [];
+
+    const hourly: HourlyForecast[] = [];
+    for (let i = 0; i < 12; i++) {
+      const idx = nowHour + i;
+      if (idx >= rawTemps.length) break;
+      const code = rawCodes[idx] ?? 0;
+      hourly.push({
+        hour: idx % 24,
+        temp: Math.round(rawTemps[idx]),
+        emoji: (WMO[code] ?? WMO[0]).emoji,
+      });
+    }
+
+    // ── Daily (sunrise / sunset) ──────────────────────────────────────────────
+    const sunriseIso: string = wx.daily?.sunrise?.[0] ?? "";
+    const sunsetIso:  string = wx.daily?.sunset?.[0]  ?? "";
+    const sunrise = parseTime(sunriseIso);
+    const sunset  = parseTime(sunsetIso);
+
+    // Daylight hours
+    let daylight = 0;
+    if (sunrise !== "–" && sunset !== "–") {
+      const [rh, rm] = sunrise.split(":").map(Number);
+      const [sh, sm] = sunset.split(":").map(Number);
+      daylight = Math.round(((sh * 60 + sm) - (rh * 60 + rm)) / 60);
+    }
 
     return {
       temp: Math.round(c.temperature_2m as number),
@@ -110,6 +164,10 @@ export async function fetchWeather(address: string): Promise<WeatherData | null>
       label: wmo.label,
       windSpeed: Math.round(c.wind_speed_10m as number),
       location: name as string,
+      hourly,
+      sunrise,
+      sunset,
+      daylight,
     };
   } catch {
     return null;

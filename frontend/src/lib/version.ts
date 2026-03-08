@@ -1,5 +1,5 @@
 // Bump APP_VERSION manually when releasing a significant update
-export const APP_VERSION = "1.5";
+export const APP_VERSION = "1.6";
 
 // Injected automatically at build time by next.config.ts
 export const BUILD_DATE: string =
