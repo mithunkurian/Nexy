@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useLiveInfo } from "@/hooks/useLiveInfo";
 import { formatEventTime } from "@/lib/calendar";
+import { CALENDAR_COLOR_MAP } from "@/lib/settings";
 import { useLandscape } from "@/hooks/useLandscape";
 import type { HourlyForecast } from "@/lib/weather";
 
@@ -418,6 +419,18 @@ export function LiveInfoPage({ onClose }: Props) {
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
         {calendarEvents.length > 0 ? calendarEvents.map((event) => (
           <div key={event.id} className="px-4 py-3">
+            {/* Calendar owner dots */}
+            <div className="flex items-center gap-1.5 mb-1">
+              {event.calendars.map((cal) => (
+                <span key={cal.name} className="flex items-center gap-1">
+                  <span className={cn("w-2 h-2 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
+                  <span className={cn("text-[10px] font-semibold", CALENDAR_COLOR_MAP[cal.color].text)}>{cal.name}</span>
+                </span>
+              ))}
+              {event.calendars.length > 1 && (
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">· shared</span>
+              )}
+            </div>
             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug">{event.title}</p>
             <p className="text-xs text-blue-500 mt-0.5">{formatEventTime(event)}</p>
             {event.location && (

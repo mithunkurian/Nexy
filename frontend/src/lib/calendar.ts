@@ -2,6 +2,13 @@
 // with "Google Calendar API" enabled, and the calendar must be public
 // OR the calendar ID + API key from a service account.
 
+import type { CalendarColor, CalendarConfig } from "@/lib/settings";
+
+export interface CalendarEntry {
+  name: string;
+  color: CalendarColor;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -10,20 +17,22 @@ export interface CalendarEvent {
   allDay: boolean;
   location?: string;
   description?: string;
+  /** Which calendars this event belongs to (1 = personal, 2+ = shared) */
+  calendars: CalendarEntry[];
 }
 
-export async function fetchCalendarEvents(
-  calendarId: string,
+async function fetchSingleCalendar(
+  config: CalendarConfig,
   apiKey: string,
 ): Promise<CalendarEvent[]> {
   try {
     const now = new Date().toISOString();
     const url =
       `https://www.googleapis.com/calendar/v3/calendars/` +
-      `${encodeURIComponent(calendarId)}/events` +
+      `${encodeURIComponent(config.calendarId)}/events` +
       `?key=${apiKey}` +
       `&timeMin=${encodeURIComponent(now)}` +
-      `&maxResults=5` +
+      `&maxResults=10` +
       `&singleEvents=true` +
       `&orderBy=startTime`;
 
@@ -52,11 +61,48 @@ export async function fetchCalendarEvents(
         allDay,
         location: item.location,
         description: item.description,
+        calendars: [{ name: config.name, color: config.color }],
       };
     });
   } catch {
     return [];
   }
+}
+
+/**
+ * Fetch events from all configured calendars in parallel.
+ * Events with the same Google event ID (shared/invited events) are merged into
+ * one entry with multiple `calendars` entries so the UI can show all owners.
+ */
+export async function fetchCalendarEvents(
+  configs: CalendarConfig[],
+  apiKey: string,
+): Promise<CalendarEvent[]> {
+  if (configs.length === 0 || !apiKey) return [];
+
+  const results = await Promise.all(
+    configs.map((cfg) => fetchSingleCalendar(cfg, apiKey)),
+  );
+
+  // Deduplicate by event id — merge calendars arrays
+  const map = new Map<string, CalendarEvent>();
+  for (const events of results) {
+    for (const event of events) {
+      const existing = map.get(event.id);
+      if (existing) {
+        // Same event in another calendar — add that calendar's entry if not already present
+        const alreadyHas = existing.calendars.some((c) => c.name === event.calendars[0].name);
+        if (!alreadyHas) existing.calendars.push(event.calendars[0]);
+      } else {
+        map.set(event.id, event);
+      }
+    }
+  }
+
+  // Sort by start time and return top 8
+  return [...map.values()]
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .slice(0, 8);
 }
 
 /** Format a CalendarEvent start time as a readable string */

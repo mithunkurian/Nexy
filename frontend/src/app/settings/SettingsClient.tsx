@@ -7,6 +7,10 @@ import {
   type AccentColor,
   type AIProvider,
   type TransitRoute,
+  type CalendarConfig,
+  type CalendarColor,
+  CALENDAR_COLORS,
+  CALENDAR_COLOR_MAP,
   DEFAULT_SETTINGS,
 } from "@/lib/settings";
 import {
@@ -203,6 +207,8 @@ export default function SettingsClient() {
   const [activeSection, setActiveSection] = useState<SectionId>("profile");
   const [newRoute, setNewRoute] = useState<Omit<TransitRoute, "id">>({ fromStop: "", toStop: "", lineFilter: "" });
   const [addingRoute, setAddingRoute] = useState(false);
+  const [newCal, setNewCal] = useState<Omit<CalendarConfig, "id">>({ name: "", calendarId: "", color: "blue" });
+  const [addingCal, setAddingCal] = useState(false);
 
   useEffect(() => {
     if (hydrated || synced) setDraft({ ...settings });
@@ -423,15 +429,108 @@ export default function SettingsClient() {
 
     calendar: (
       <SectionCard title="Google Calendar" icon={Calendar}>
+        {/* Calendars list */}
         <Field
-          label="Calendar ID"
-          hint="Your Google Calendar ID — usually your Gmail address. The calendar must be public or use a service account."
+          label="Calendars"
+          hint="Add one calendar per person. Each gets a colour so events are easy to tell apart. Shared events show both names."
         >
-          <TextInput value={draft.googleCalendarId} onChange={(v) => patch("googleCalendarId", v)} placeholder="e.g. you@gmail.com" />
+          <div className="space-y-2">
+            {draft.calendars.map((cal) => (
+              <div
+                key={cal.id}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+              >
+                <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200">{cal.name}</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{cal.calendarId}</p>
+                </div>
+                <button
+                  onClick={() => patch("calendars", draft.calendars.filter((c) => c.id !== cal.id))}
+                  className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  title="Remove calendar"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+
+            {/* Add calendar form */}
+            {addingCal ? (
+              <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50/50 dark:bg-blue-900/10">
+                <input
+                  type="text"
+                  value={newCal.name}
+                  onChange={(e) => setNewCal((c) => ({ ...c, name: e.target.value }))}
+                  placeholder="Name, e.g. Mithun"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
+                />
+                <input
+                  type="text"
+                  value={newCal.calendarId}
+                  onChange={(e) => setNewCal((c) => ({ ...c, calendarId: e.target.value }))}
+                  placeholder="Calendar ID, e.g. you@gmail.com"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
+                />
+                {/* Colour picker */}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-[11px] text-gray-500 mr-1">Colour:</span>
+                  {CALENDAR_COLORS.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setNewCal((c) => ({ ...c, color: col as CalendarColor }))}
+                      className={cn(
+                        "w-5 h-5 rounded-full transition-all",
+                        CALENDAR_COLOR_MAP[col].dot,
+                        newCal.color === col ? "ring-2 ring-offset-1 ring-gray-400" : "opacity-60 hover:opacity-100",
+                      )}
+                      title={col}
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      if (!newCal.name.trim() || !newCal.calendarId.trim()) return;
+                      const cal: CalendarConfig = {
+                        id: crypto.randomUUID(),
+                        name: newCal.name.trim(),
+                        calendarId: newCal.calendarId.trim(),
+                        color: newCal.color,
+                      };
+                      patch("calendars", [...draft.calendars, cal]);
+                      setNewCal({ name: "", calendarId: "", color: "blue" });
+                      setAddingCal(false);
+                    }}
+                    disabled={!newCal.name.trim() || !newCal.calendarId.trim()}
+                    className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-blue-600 transition-colors"
+                  >
+                    Add Calendar
+                  </button>
+                  <button
+                    onClick={() => { setAddingCal(false); setNewCal({ name: "", calendarId: "", color: "blue" }); }}
+                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : draft.calendars.length < 8 ? (
+              <button
+                onClick={() => setAddingCal(true)}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 text-xs text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-colors"
+              >
+                <Plus size={13} /> Add calendar
+              </button>
+            ) : null}
+          </div>
         </Field>
+
+        {/* Shared API key */}
         <Field
           label="Google API Key"
-          hint='A free Google Cloud API key with "Google Calendar API" enabled. Create one at console.cloud.google.com.'
+          hint='One key works for all calendars. Create a free key at console.cloud.google.com with "Google Calendar API" enabled.'
         >
           <TextInput value={draft.googleCalendarApiKey} onChange={(v) => patch("googleCalendarApiKey", v)} placeholder="AIza…" type="password" />
         </Field>

@@ -47,10 +47,10 @@ export function useLiveInfo(): LiveInfo {
         setRouteDepartures([]);
       }
 
-      // Google Calendar — only when both fields are configured
-      if (settings.googleCalendarId && settings.googleCalendarApiKey) {
+      // Google Calendar — only when API key + at least one calendar configured
+      if (settings.googleCalendarApiKey && settings.calendars.length > 0) {
         const events = await fetchCalendarEvents(
-          settings.googleCalendarId,
+          settings.calendars,
           settings.googleCalendarApiKey,
         );
         if (cancelled) return;
@@ -75,7 +75,7 @@ export function useLiveInfo(): LiveInfo {
     settings.electricityZone,
     settings.trafiklabApiKey,
     settings.transitRoutes,
-    settings.googleCalendarId,
+    settings.calendars,
     settings.googleCalendarApiKey,
   ]);
 
