@@ -78,12 +78,34 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 const STORAGE_KEY = "nexy_settings";
 
+/**
+ * Merge raw stored data with defaults, applying any field migrations needed.
+ * Currently handles: googleCalendarId (old single-calendar field) → calendars[]
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function migrateRaw(raw: Record<string, any>): AppSettings {
+  const merged: AppSettings = { ...DEFAULT_SETTINGS, ...raw };
+
+  // Migration: old single googleCalendarId → new calendars[]
+  if (raw.googleCalendarId && typeof raw.googleCalendarId === "string" &&
+      (!raw.calendars || (Array.isArray(raw.calendars) && raw.calendars.length === 0))) {
+    merged.calendars = [{
+      id: "migrated-calendar",
+      name: "My Calendar",
+      calendarId: raw.googleCalendarId as string,
+      color: "blue",
+    }];
+  }
+
+  return merged;
+}
+
 export function loadSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    return migrateRaw(JSON.parse(raw));
   } catch {
     return DEFAULT_SETTINGS;
   }

@@ -12,6 +12,7 @@ import {
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
+  migrateRaw,
 } from "@/lib/settings";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
@@ -52,8 +53,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       ref,
       (snap) => {
         if (snap.exists()) {
-          // Remote settings exist — merge with defaults and apply everywhere
-          const remote = { ...DEFAULT_SETTINGS, ...snap.data() } as AppSettings;
+          // Remote settings exist — merge with defaults + run migrations and apply everywhere
+          const remote = migrateRaw(snap.data() as Record<string, unknown>);
           setSettings(remote);
           saveSettings(remote); // keep localStorage in sync as a cache
         } else {
