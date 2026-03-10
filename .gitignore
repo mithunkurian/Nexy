@@ -38,3 +38,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Local tooling / generated files
+.claude/
+oAut.json
+*.tsbuildinfo
