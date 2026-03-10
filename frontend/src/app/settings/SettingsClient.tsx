@@ -7,10 +7,6 @@ import {
   type AccentColor,
   type AIProvider,
   type TransitRoute,
-  type CalendarConfig,
-  type CalendarColor,
-  CALENDAR_COLORS,
-  CALENDAR_COLOR_MAP,
   DEFAULT_SETTINGS,
 } from "@/lib/settings";
 import {
@@ -33,27 +29,36 @@ import {
   Calendar,
   Plus,
   Trash2,
-  AlertCircle,
   Loader,
+  LogIn,
+  LogOut,
+  Shield,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VERSION_LABEL } from "@/lib/version";
 import { useLandscape } from "@/hooks/useLandscape";
+import { useGoogleAuth } from "@/hooks/useGoogleAuth";
+import { useAuth } from "@/contexts/AuthContext";
+import { useUserManagement } from "@/hooks/useUserManagement";
+import type { Role } from "@/types/auth";
 
 // ─── Section nav config ───────────────────────────────────────────────────────
 
-const SECTIONS = [
-  { id: "profile",    title: "Profile",       icon: User     },
-  { id: "appearance", title: "Appearance",    icon: Palette  },
-  { id: "connection", title: "Connection",    icon: Wifi     },
-  { id: "commute",    title: "Commute",       icon: Bus      },
-  { id: "ai",         title: "AI Provider",   icon: Bot      },
-  { id: "calendar",   title: "Calendar",      icon: Calendar },
-  { id: "sync",       title: "Sync",          icon: Share2   },
-  { id: "about",      title: "About",         icon: Server   },
+const ALL_SECTIONS = [
+  { id: "profile",    title: "Profile",       icon: User,    adminOnly: false },
+  { id: "appearance", title: "Appearance",    icon: Palette, adminOnly: false },
+  { id: "connection", title: "Connection",    icon: Wifi,    adminOnly: false },
+  { id: "commute",    title: "Commute",       icon: Bus,     adminOnly: false },
+  { id: "ai",         title: "AI Provider",   icon: Bot,     adminOnly: false },
+  { id: "calendar",   title: "Calendar",      icon: Calendar,adminOnly: false },
+  { id: "sync",       title: "Sync",          icon: Share2,  adminOnly: false },
+  { id: "users",      title: "Users & Access",icon: Shield,  adminOnly: true  },
+  { id: "about",      title: "About",         icon: Server,  adminOnly: false },
 ] as const;
 
-type SectionId = typeof SECTIONS[number]["id"];
+type SectionId = typeof ALL_SECTIONS[number]["id"];
 
 // ─── Reusable form pieces ────────────────────────────────────────────────────
 
@@ -201,6 +206,9 @@ function ColorSwatches({
 export default function SettingsClient() {
   const landscape = useLandscape();
   const { settings, hydrated, synced, update, reset } = useSettings();
+  const { isSignedIn, isLoading: authLoading, error: authError, calendarList, signIn, signOut: signOutCalendar } = useGoogleAuth();
+  const { role, signOut: signOutApp } = useAuth();
+  const { users, updateRole, toggleDisabled, deleteUser } = useUserManagement();
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
   const [importCode, setImportCode] = useState("");
@@ -209,39 +217,9 @@ export default function SettingsClient() {
   const [activeSection, setActiveSection] = useState<SectionId>("profile");
   const [newRoute, setNewRoute] = useState<Omit<TransitRoute, "id">>({ fromStop: "", toStop: "", lineFilter: "" });
   const [addingRoute, setAddingRoute] = useState(false);
-  const [newCal, setNewCal] = useState<Omit<CalendarConfig, "id">>({ name: "", calendarId: "", color: "blue" });
-  const [addingCal, setAddingCal] = useState(false);
-  const [calValidation, setCalValidation] = useState<Record<string, { status: "checking" | "ok" | "error"; message: string }>>({});
 
-  async function validateCalendar(calId: string, calendarId: string, apiKey: string) {
-    if (!apiKey) {
-      setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "Add your Google API Key below first." } }));
-      return;
-    }
-    setCalValidation((v) => ({ ...v, [calId]: { status: "checking", message: "" } }));
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}?key=${apiKey}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setCalValidation((v) => ({ ...v, [calId]: { status: "ok", message: `Connected — "${data.summary}"` } }));
-      } else if (res.status === 403) {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "403 — Calendar is private. In Google Calendar → Settings → your calendar → Access permissions → tick \"Make available to public\"." } }));
-      } else if (res.status === 404) {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "404 — Calendar not found. Check the Calendar ID is correct (usually your Gmail address)." } }));
-      } else if (res.status === 401) {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "401 — API key not authorised. Fix: (1) Go to console.cloud.google.com → APIs & Services → Enabled APIs → make sure \"Google Calendar API\" is enabled. (2) Check the key has no HTTP referrer restrictions, or add nexy-smarthome.web.app/* to the allowed list." } }));
-      } else if (res.status === 400) {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "400 — Bad request. Check your API key format is correct (starts with AIza…)." } }));
-      } else {
-        setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: `Error ${res.status} — check API key restrictions in Google Cloud Console.` } }));
-      }
-    } catch {
-      setCalValidation((v) => ({ ...v, [calId]: { status: "error", message: "Network error — could not reach Google." } }));
-    }
-  }
-
+  // Only show sections appropriate for this user's role
+  const SECTIONS = ALL_SECTIONS.filter((s) => !s.adminOnly || role === "admin");
   useEffect(() => {
     if (hydrated || synced) setDraft({ ...settings });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,6 +279,15 @@ export default function SettingsClient() {
         <Field label="Address" hint="Your home address — used for weather location">
           <TextInput value={draft.address} onChange={(v) => patch("address", v)} placeholder="e.g. Huddinge, Sweden" />
         </Field>
+        {/* Sign Out */}
+        <div className="px-5 py-4 border-t border-gray-50 dark:border-gray-800">
+          <button
+            onClick={() => signOutApp()}
+            className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors"
+          >
+            <LogOut size={14} /> Sign out of Nexy
+          </button>
+        </div>
       </SectionCard>
     ),
 
@@ -461,136 +448,93 @@ export default function SettingsClient() {
 
     calendar: (
       <SectionCard title="Google Calendar" icon={Calendar}>
-        {/* Calendars list */}
-        <Field
-          label="Calendars"
-          hint="Add one calendar per person. Each gets a colour so events are easy to tell apart. Shared events show both names."
-        >
-          <div className="space-y-2">
-            {draft.calendars.map((cal) => {
-              const v = calValidation[cal.id];
-              return (
-                <div key={cal.id} className="space-y-1">
-                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                    <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-800 dark:text-gray-200">{cal.name}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{cal.calendarId}</p>
-                    </div>
-                    {/* Test button */}
-                    <button
-                      onClick={() => validateCalendar(cal.id, cal.calendarId, draft.googleCalendarApiKey)}
-                      disabled={v?.status === "checking"}
-                      className="flex-shrink-0 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-[11px] text-gray-500 hover:border-blue-300 hover:text-blue-500 transition-colors disabled:opacity-50"
-                      title="Test connection"
-                    >
-                      {v?.status === "checking" ? <Loader size={11} className="animate-spin" /> : "Test"}
-                    </button>
-                    <button
-                      onClick={() => patch("calendars", draft.calendars.filter((c) => c.id !== cal.id))}
-                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                      title="Remove calendar"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                  {/* Validation result */}
-                  {v && v.status !== "checking" && (
-                    <div className={cn(
-                      "flex items-start gap-1.5 px-3 py-2 rounded-lg text-[11px] leading-snug",
-                      v.status === "ok"
-                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
-                        : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400",
-                    )}>
-                      {v.status === "ok"
-                        ? <CheckCircle size={12} className="flex-shrink-0 mt-0.5" />
-                        : <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />}
-                      <span>{v.message}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Add calendar form */}
-            {addingCal ? (
-              <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50/50 dark:bg-blue-900/10">
-                <input
-                  type="text"
-                  value={newCal.name}
-                  onChange={(e) => setNewCal((c) => ({ ...c, name: e.target.value }))}
-                  placeholder="Name, e.g. Mithun"
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
-                />
-                <input
-                  type="text"
-                  value={newCal.calendarId}
-                  onChange={(e) => setNewCal((c) => ({ ...c, calendarId: e.target.value }))}
-                  placeholder="Calendar ID, e.g. you@gmail.com"
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-blue-400"
-                />
-                {/* Colour picker */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-[11px] text-gray-500 mr-1">Colour:</span>
-                  {CALENDAR_COLORS.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setNewCal((c) => ({ ...c, color: col as CalendarColor }))}
-                      className={cn(
-                        "w-5 h-5 rounded-full transition-all",
-                        CALENDAR_COLOR_MAP[col].dot,
-                        newCal.color === col ? "ring-2 ring-offset-1 ring-gray-400" : "opacity-60 hover:opacity-100",
-                      )}
-                      title={col}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => {
-                      if (!newCal.name.trim() || !newCal.calendarId.trim()) return;
-                      const cal: CalendarConfig = {
-                        id: crypto.randomUUID(),
-                        name: newCal.name.trim(),
-                        calendarId: newCal.calendarId.trim(),
-                        color: newCal.color,
-                      };
-                      patch("calendars", [...draft.calendars, cal]);
-                      setNewCal({ name: "", calendarId: "", color: "blue" });
-                      setAddingCal(false);
-                    }}
-                    disabled={!newCal.name.trim() || !newCal.calendarId.trim()}
-                    className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-blue-600 transition-colors"
-                  >
-                    Add Calendar
-                  </button>
-                  <button
-                    onClick={() => { setAddingCal(false); setNewCal({ name: "", calendarId: "", color: "blue" }); }}
-                    className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : draft.calendars.length < 8 ? (
+        <div className="px-5 py-4 space-y-4">
+          {/* ── Not connected ── */}
+          {!isSignedIn && !authLoading && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
+                Sign in with Google to access your private calendars. Your calendars do <strong className="text-gray-600 dark:text-gray-300">not</strong> need to be made public.
+              </p>
+              {authError && (
+                <p className="text-xs text-red-500">{authError}</p>
+              )}
               <button
-                onClick={() => setAddingCal(true)}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 text-xs text-gray-400 hover:text-blue-500 hover:border-blue-300 transition-colors"
+                onClick={signIn}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all shadow-sm"
               >
-                <Plus size={13} /> Add calendar
+                <LogIn size={14} className="text-blue-500" />
+                Connect with Google
               </button>
-            ) : null}
-          </div>
-        </Field>
+            </div>
+          )}
 
-        {/* Shared API key */}
-        <Field
-          label="Google API Key"
-          hint='One key works for all calendars. Create a free key at console.cloud.google.com with "Google Calendar API" enabled.'
-        >
-          <TextInput value={draft.googleCalendarApiKey} onChange={(v) => patch("googleCalendarApiKey", v)} placeholder="AIza…" type="password" />
-        </Field>
+          {/* ── Signing in (loading) ── */}
+          {authLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Loader size={14} className="animate-spin text-blue-500" />
+              Connecting…
+            </div>
+          )}
+
+          {/* ── Connected ── */}
+          {isSignedIn && !authLoading && (
+            <div className="space-y-3">
+              {/* Connected header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Connected</span>
+                </div>
+                <button
+                  onClick={signOutCalendar}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <LogOut size={11} /> Disconnect
+                </button>
+              </div>
+
+              {/* Calendar picker */}
+              {calendarList.length > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Select calendars to show</p>
+                  {calendarList.map((cal) => {
+                    const checked = draft.googleCalendarIds.includes(cal.id);
+                    return (
+                      <label
+                        key={cal.id}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-pointer hover:border-blue-200 dark:hover:border-blue-700 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const next = checked
+                              ? draft.googleCalendarIds.filter((id) => id !== cal.id)
+                              : [...draft.googleCalendarIds, cal.id];
+                            patch("googleCalendarIds", next);
+                          }}
+                          className="w-4 h-4 rounded accent-blue-500"
+                        />
+                        <span className="text-xs text-gray-800 dark:text-gray-200 flex-1 truncate">{cal.summary}</span>
+                        {cal.primary && (
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0">primary</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 pt-1">
+                    Changes saved with the Save Settings button below.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <Loader size={12} className="animate-spin" />
+                  Loading your calendars…
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </SectionCard>
     ),
 
@@ -639,6 +583,63 @@ export default function SettingsClient() {
           </div>
           {importError && <p className="text-xs text-red-500 mt-1">{importError}</p>}
         </Field>
+      </SectionCard>
+    ),
+
+    users: (
+      <SectionCard title="Users & Access" icon={Shield}>
+        {users.length === 0 ? (
+          <div className="px-5 py-4 text-xs text-gray-400">No users found.</div>
+        ) : (
+          users.map((u) => (
+            <div key={u.uid} className="flex items-center gap-3 px-5 py-3.5">
+              {/* Avatar / name */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{u.displayName}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{u.email}</p>
+              </div>
+
+              {/* Role selector */}
+              <select
+                value={u.role}
+                onChange={(e) => updateRole(u.uid, e.target.value as Role)}
+                className="text-xs rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-blue-400"
+              >
+                <option value="pending">Pending</option>
+                <option value="family">Family</option>
+                <option value="admin">Admin</option>
+              </select>
+
+              {/* Enable / Disable */}
+              <button
+                onClick={() => toggleDisabled(u.uid, !u.disabled)}
+                title={u.disabled ? "Enable access" : "Disable access"}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors",
+                  u.disabled
+                    ? "text-gray-300 dark:text-gray-600 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                    : "text-emerald-500 hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                )}
+              >
+                {u.disabled ? <UserX size={14} /> : <UserCheck size={14} />}
+              </button>
+
+              {/* Delete */}
+              <button
+                onClick={() => { if (confirm(`Remove ${u.displayName}?`)) deleteUser(u.uid); }}
+                title="Remove user"
+                className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+        <div className="px-5 py-3 border-t border-gray-50 dark:border-gray-800">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
+            New users see a &ldquo;Waiting for approval&rdquo; screen until you change their role to Family or Admin.
+          </p>
+        </div>
       </SectionCard>
     ),
 

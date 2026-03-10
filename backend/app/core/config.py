@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Matter
     matter_server_url: str = "ws://localhost:5580/ws"
 
+    # Firebase Admin SDK — paste service account JSON (one line) or a file path
+    firebase_service_account: str = ""
+
     # CORS
     cors_origins: str = "http://localhost:3000"
 

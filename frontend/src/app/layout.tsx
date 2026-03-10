@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LayoutShell } from "@/components/LayoutShell";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { RouteGuard } from "@/components/RouteGuard";
 
 export const metadata: Metadata = {
   title: "Nexy — Smart Home AI",
@@ -22,7 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="bg-gray-50 dark:bg-gray-950 transition-colors">
         <SettingsProvider>
-          <LayoutShell>{children}</LayoutShell>
+          <AuthProvider>
+            <RouteGuard>
+              <LayoutShell>{children}</LayoutShell>
+            </RouteGuard>
+          </AuthProvider>
         </SettingsProvider>
       </body>
     </html>

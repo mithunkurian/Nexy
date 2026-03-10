@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
+from .core import firebase_admin_init  # noqa: F401 — triggers SDK init on startup
 from .api import api_router
 from .integrations.registry import get_registry
 

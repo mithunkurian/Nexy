@@ -7,6 +7,7 @@ from ...integrations.registry import get_registry, IntegrationRegistry
 from ...models.command import ChatRequest, ChatResponse, AIAction
 from ...models.device import DeviceCommand
 from ...core.websocket import manager
+from ...core.auth_dep import get_current_user
 import structlog
 
 log = structlog.get_logger()
@@ -91,6 +92,7 @@ async def chat(
     req: ChatRequest,
     ai: BaseAIProvider = Depends(get_ai),
     registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
 ):
     devices = await registry.get_all_devices()
     rooms = await registry.get_all_rooms()
@@ -109,6 +111,7 @@ async def chat_stream(
     req: ChatRequest,
     ai: BaseAIProvider = Depends(get_ai),
     registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
 ):
     devices = await registry.get_all_devices()
     rooms = await registry.get_all_rooms()

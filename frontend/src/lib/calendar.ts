@@ -1,13 +1,6 @@
-// Google Calendar API v3 — requires a free Google Cloud API key
-// with "Google Calendar API" enabled, and the calendar must be public
-// OR the calendar ID + API key from a service account.
-
-import type { CalendarColor, CalendarConfig } from "@/lib/settings";
-
-export interface CalendarEntry {
-  name: string;
-  color: CalendarColor;
-}
+// Google Calendar API v3 — uses OAuth Bearer token (no API key needed).
+// Calendars do NOT need to be public. The signed-in user's private calendars
+// and any calendars shared with them are all accessible.
 
 export interface CalendarEvent {
   id: string;
@@ -17,26 +10,25 @@ export interface CalendarEvent {
   allDay: boolean;
   location?: string;
   description?: string;
-  /** Which calendars this event belongs to (1 = personal, 2+ = shared) */
-  calendars: CalendarEntry[];
 }
 
 async function fetchSingleCalendar(
-  config: CalendarConfig,
-  apiKey: string,
+  calendarId: string,
+  accessToken: string,
 ): Promise<CalendarEvent[]> {
   try {
     const now = new Date().toISOString();
     const url =
       `https://www.googleapis.com/calendar/v3/calendars/` +
-      `${encodeURIComponent(config.calendarId)}/events` +
-      `?key=${apiKey}` +
-      `&timeMin=${encodeURIComponent(now)}` +
+      `${encodeURIComponent(calendarId)}/events` +
+      `?timeMin=${encodeURIComponent(now)}` +
       `&maxResults=10` +
       `&singleEvents=true` +
       `&orderBy=startTime`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (!res.ok) return [];
 
     const data = await res.json();
@@ -61,7 +53,6 @@ async function fetchSingleCalendar(
         allDay,
         location: item.location,
         description: item.description,
-        calendars: [{ name: config.name, color: config.color }],
       };
     });
   } catch {
@@ -70,39 +61,29 @@ async function fetchSingleCalendar(
 }
 
 /**
- * Fetch events from all configured calendars in parallel.
- * Events with the same Google event ID (shared/invited events) are merged into
- * one entry with multiple `calendars` entries so the UI can show all owners.
+ * Fetch events from all selected calendars in parallel.
+ * Merges, deduplicates by event id, sorts by start time, returns top 10.
  */
 export async function fetchCalendarEvents(
-  configs: CalendarConfig[],
-  apiKey: string,
+  calendarIds: string[],
+  accessToken: string,
 ): Promise<CalendarEvent[]> {
-  if (configs.length === 0 || !apiKey) return [];
+  if (calendarIds.length === 0 || !accessToken) return [];
 
   const results = await Promise.all(
-    configs.map((cfg) => fetchSingleCalendar(cfg, apiKey)),
+    calendarIds.map((id) => fetchSingleCalendar(id, accessToken)),
   );
 
-  // Deduplicate by event id — merge calendars arrays
   const map = new Map<string, CalendarEvent>();
   for (const events of results) {
     for (const event of events) {
-      const existing = map.get(event.id);
-      if (existing) {
-        // Same event in another calendar — add that calendar's entry if not already present
-        const alreadyHas = existing.calendars.some((c) => c.name === event.calendars[0].name);
-        if (!alreadyHas) existing.calendars.push(event.calendars[0]);
-      } else {
-        map.set(event.id, event);
-      }
+      if (!map.has(event.id)) map.set(event.id, event);
     }
   }
 
-  // Sort by start time and return top 8
   return [...map.values()]
     .sort((a, b) => a.start.getTime() - b.start.getTime())
-    .slice(0, 8);
+    .slice(0, 10);
 }
 
 /** Format a CalendarEvent start time as a readable string */

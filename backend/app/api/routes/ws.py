@@ -1,6 +1,8 @@
 """WebSocket endpoint for real-time device state updates."""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ...core.websocket import manager
+from ...core.firebase_admin_init import verify_token
+from fastapi import HTTPException
 import structlog
 
 log = structlog.get_logger()
@@ -8,7 +10,13 @@ router = APIRouter(tags=["websocket"])
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket, token: str = ""):
+    # Verify token before accepting the connection
+    try:
+        verify_token(token)
+    except HTTPException:
+        await ws.close(code=1008)  # 1008 = Policy Violation
+        return
     await manager.connect(ws)
     try:
         while True:

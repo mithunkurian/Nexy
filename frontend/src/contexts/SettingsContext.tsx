@@ -12,9 +12,8 @@ import {
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
-  migrateRaw,
 } from "@/lib/settings";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 // Firestore document that holds all settings (one doc for the whole home)
@@ -53,13 +52,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       ref,
       (snap) => {
         if (snap.exists()) {
-          // Remote settings exist — merge with defaults + run migrations and apply everywhere
-          const remote = migrateRaw(snap.data() as Record<string, unknown>);
+          // Remote settings exist — merge with defaults and apply everywhere
+          const remote: AppSettings = { ...DEFAULT_SETTINGS, ...snap.data() };
           setSettings(remote);
           saveSettings(remote); // keep localStorage in sync as a cache
         } else {
-          // No Firestore doc yet — push local settings up to the cloud
-          setDoc(ref, local).catch(console.error);
+          // No Firestore doc yet — push local settings up to the cloud (admin only)
+          if (auth.currentUser) setDoc(ref, local).catch(console.error);
         }
         setSynced(true);
       },
@@ -93,8 +92,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const update = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...patch };
-      saveSettings(next);                                    // localStorage (instant)
-      setDoc(SETTINGS_REF(), next).catch(console.error);    // Firestore (cloud)
+      saveSettings(next);                                                          // localStorage (instant)
+      if (auth.currentUser) setDoc(SETTINGS_REF(), next).catch(console.error);   // Firestore (authenticated only)
       return next;
     });
   }, []);
@@ -103,7 +102,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => {
     saveSettings(DEFAULT_SETTINGS);
     setSettings(DEFAULT_SETTINGS);
-    setDoc(SETTINGS_REF(), DEFAULT_SETTINGS).catch(console.error);
+    if (auth.currentUser) setDoc(SETTINGS_REF(), DEFAULT_SETTINGS).catch(console.error);
   }, []);
 
   return (

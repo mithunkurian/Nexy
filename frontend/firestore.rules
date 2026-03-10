@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ─── settings/main ────────────────────────────────────────────────────────
+    // Any authenticated user can read (needed for SettingsContext on all devices)
+    // Only admins can write settings
+    match /settings/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ─── users/{uid} ─────────────────────────────────────────────────────────
+    // A user can read their own profile (AuthContext needs this on sign-in)
+    // A user can create their own profile on first sign-in (bootstrap)
+    // Only admins can update any profile; users cannot escalate their own role/disabled
+    // Only admins can delete user records
+    match /users/{uid} {
+      allow read: if request.auth.uid == uid || isAdmin();
+
+      // First sign-in: user creates their own profile
+      allow create: if request.auth.uid == uid;
+
+      // Admin can update anything; users can update non-sensitive fields only
+      allow update: if isAdmin() ||
+        (request.auth.uid == uid &&
+         !("role" in request.resource.data.diff(resource.data).affectedKeys()) &&
+         !("disabled" in request.resource.data.diff(resource.data).affectedKeys()));
+
+      allow delete: if isAdmin();
+    }
+  }
+}

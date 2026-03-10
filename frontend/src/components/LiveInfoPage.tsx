@@ -5,7 +5,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useLiveInfo } from "@/hooks/useLiveInfo";
 import { formatEventTime } from "@/lib/calendar";
-import { CALENDAR_COLOR_MAP } from "@/lib/settings";
 import { useLandscape } from "@/hooks/useLandscape";
 import type { HourlyForecast } from "@/lib/weather";
 
@@ -292,7 +291,7 @@ function DaylightBar({ sunrise, sunset }: { sunrise: string; sunset: string }) {
 // ── Main modal ────────────────────────────────────────────────────────────────
 export function LiveInfoPage({ onClose }: Props) {
   const landscape = useLandscape();
-  const { weather, routeDepartures, electricity, calendarEvents } = useLiveInfo();
+  const { weather, routeDepartures, electricity, calendarEvents, calendarConnected, wasCalendarConnected, reconnect } = useLiveInfo();
   const currentHour = new Date().getHours();
 
   useEffect(() => {
@@ -418,32 +417,29 @@ export function LiveInfoPage({ onClose }: Props) {
       <CardHeader icon={Calendar} title="Calendar" color="bg-rose-500" />
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
         {calendarEvents.length > 0 ? calendarEvents.map((event) => (
-          <div key={event.id} className="px-4 py-3">
-            {/* Calendar owner dots */}
-            <div className="flex items-center gap-1.5 mb-1">
-              {event.calendars.map((cal) => (
-                <span key={cal.name} className="flex items-center gap-1">
-                  <span className={cn("w-2 h-2 rounded-full flex-shrink-0", CALENDAR_COLOR_MAP[cal.color].dot)} />
-                  <span className={cn("text-[10px] font-semibold", CALENDAR_COLOR_MAP[cal.color].text)}>{cal.name}</span>
-                </span>
-              ))}
-              {event.calendars.length > 1 && (
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">· shared</span>
-              )}
-            </div>
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug">{event.title}</p>
-            <p className="text-xs text-blue-500 mt-0.5">{formatEventTime(event)}</p>
-            {event.location && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1 truncate">
-                <MapPin size={10} className="flex-shrink-0" /> {event.location}
-              </p>
-            )}
+          <div key={event.id} className="px-4 py-2">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug truncate">{event.title}</p>
+            <p className="text-xs text-blue-500 leading-tight">
+              {formatEventTime(event)}
+              {event.location && <span className="text-gray-400 dark:text-gray-500"> · {event.location}</span>}
+            </p>
           </div>
-        )) : (
+        )) : calendarConnected ? (
           <div className="px-4 py-5 text-center">
-            <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">No upcoming events</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">No upcoming events</p>
+          </div>
+        ) : wasCalendarConnected ? (
+          <div className="px-4 py-5 text-center">
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">Calendar session expired</p>
+            <button onClick={reconnect} className="text-xs text-blue-500 flex items-center gap-0.5 justify-center hover:underline">
+              Tap to reconnect <ChevronRight size={11} />
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-5 text-center">
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">Connect Google Calendar to see events</p>
             <Link href="/settings" onClick={onClose} className="text-xs text-blue-500 flex items-center gap-0.5 justify-center hover:underline">
-              Connect Google Calendar <ChevronRight size={11} />
+              Connect in Settings <ChevronRight size={11} />
             </Link>
           </div>
         )}

@@ -9,26 +9,6 @@ export interface TransitRoute {
   lineFilter: string;   // line number string to filter departures, e.g. "705"
 }
 
-export type CalendarColor = "rose" | "blue" | "green" | "violet" | "amber" | "teal";
-
-export interface CalendarConfig {
-  id: string;           // crypto.randomUUID()
-  name: string;         // display label, e.g. "Mithun", "Priya"
-  calendarId: string;   // Google Calendar ID (usually email)
-  color: CalendarColor;
-}
-
-export const CALENDAR_COLORS: CalendarColor[] = ["rose", "blue", "green", "violet", "amber", "teal"];
-
-export const CALENDAR_COLOR_MAP: Record<CalendarColor, { dot: string; text: string; border: string }> = {
-  rose:   { dot: "bg-rose-400",    text: "text-rose-600 dark:text-rose-400",     border: "border-rose-300"   },
-  blue:   { dot: "bg-blue-400",    text: "text-blue-600 dark:text-blue-400",     border: "border-blue-300"   },
-  green:  { dot: "bg-emerald-400", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-300" },
-  violet: { dot: "bg-violet-400",  text: "text-violet-600 dark:text-violet-400", border: "border-violet-300" },
-  amber:  { dot: "bg-amber-400",   text: "text-amber-600 dark:text-amber-400",   border: "border-amber-300"  },
-  teal:   { dot: "bg-teal-400",    text: "text-teal-600 dark:text-teal-400",     border: "border-teal-300"   },
-};
-
 export interface AppSettings {
   // Identity
   ownerName: string;
@@ -50,8 +30,7 @@ export interface AppSettings {
   electricityZone: string;         // SE1 / SE2 / SE3 / SE4 (default SE3 = Stockholm)
 
   // Google Calendar
-  calendars: CalendarConfig[];       // one entry per person / calendar
-  googleCalendarApiKey: string;      // Google Cloud API key with Calendar API enabled
+  googleCalendarIds: string[];     // Selected calendar IDs (chosen after OAuth sign-in)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,40 +51,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
       ? (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/api/v1/ws")
       : "ws://localhost:8000/api/v1/ws",
   aiProvider: "anthropic",
-  calendars: [],
-  googleCalendarApiKey: "",
+  googleCalendarIds: [],
 };
 
 const STORAGE_KEY = "nexy_settings";
-
-/**
- * Merge raw stored data with defaults, applying any field migrations needed.
- * Currently handles: googleCalendarId (old single-calendar field) → calendars[]
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function migrateRaw(raw: Record<string, any>): AppSettings {
-  const merged: AppSettings = { ...DEFAULT_SETTINGS, ...raw };
-
-  // Migration: old single googleCalendarId → new calendars[]
-  if (raw.googleCalendarId && typeof raw.googleCalendarId === "string" &&
-      (!raw.calendars || (Array.isArray(raw.calendars) && raw.calendars.length === 0))) {
-    merged.calendars = [{
-      id: "migrated-calendar",
-      name: "My Calendar",
-      calendarId: raw.googleCalendarId as string,
-      color: "blue",
-    }];
-  }
-
-  return merged;
-}
 
 export function loadSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return migrateRaw(JSON.parse(raw));
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch {
     return DEFAULT_SETTINGS;
   }

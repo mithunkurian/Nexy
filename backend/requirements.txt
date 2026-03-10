@@ -18,6 +18,9 @@ dirigera==0.9.3
 # Matter / Thread (python-matter-server client)
 python-matter-server[client]==6.6.0
 
+# Firebase Admin (token verification)
+firebase-admin==6.5.0
+
 # Utilities
 structlog==24.4.0
 python-multipart==0.0.19

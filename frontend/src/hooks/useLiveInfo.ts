@@ -5,17 +5,23 @@ import { fetchWeather, type WeatherData } from "@/lib/weather";
 import { fetchRouteDepartures, type RouteDeparture } from "@/lib/sl";
 import { fetchElectricityPrice, type ElectricityData } from "@/lib/electricity";
 import { fetchCalendarEvents, type CalendarEvent } from "@/lib/calendar";
+import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 
 export interface LiveInfo {
   weather: WeatherData | null;
   routeDepartures: RouteDeparture[];
   electricity: ElectricityData | null;
   calendarEvents: CalendarEvent[];
+  calendarConnected: boolean;
+  wasCalendarConnected: boolean;
+  reconnect: () => void;
   loading: boolean;
 }
 
 export function useLiveInfo(): LiveInfo {
   const { settings } = useSettings();
+  const { accessToken, wasSignedIn, signIn } = useGoogleAuth();
+
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [routeDepartures, setRouteDepartures] = useState<RouteDeparture[]>([]);
   const [electricity, setElectricity] = useState<ElectricityData | null>(null);
@@ -47,11 +53,11 @@ export function useLiveInfo(): LiveInfo {
         setRouteDepartures([]);
       }
 
-      // Google Calendar — only when API key + at least one calendar configured
-      if (settings.googleCalendarApiKey && settings.calendars.length > 0) {
+      // Google Calendar — only when signed in + at least one calendar selected
+      if (accessToken && settings.googleCalendarIds.length > 0) {
         const events = await fetchCalendarEvents(
-          settings.calendars,
-          settings.googleCalendarApiKey,
+          settings.googleCalendarIds,
+          accessToken,
         );
         if (cancelled) return;
         setCalendarEvents(events);
@@ -75,9 +81,18 @@ export function useLiveInfo(): LiveInfo {
     settings.electricityZone,
     settings.trafiklabApiKey,
     settings.transitRoutes,
-    settings.calendars,
-    settings.googleCalendarApiKey,
+    settings.googleCalendarIds,
+    accessToken,
   ]);
 
-  return { weather, routeDepartures, electricity, calendarEvents, loading };
+  return {
+    weather,
+    routeDepartures,
+    electricity,
+    calendarEvents,
+    calendarConnected: accessToken !== null,
+    wasCalendarConnected: wasSignedIn,
+    reconnect: signIn,
+    loading,
+  };
 }

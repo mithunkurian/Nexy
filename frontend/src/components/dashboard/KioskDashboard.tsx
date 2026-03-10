@@ -28,6 +28,11 @@ export default function KioskDashboard() {
       {/* ── Left panel ──────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 w-[42%] min-w-0 overflow-hidden">
 
+        {/* Version badge — top left */}
+        <p className="text-left text-[10px] text-gray-300 dark:text-gray-600 select-none leading-none">
+          {VERSION_LABEL}
+        </p>
+
         {/* Greeting card */}
         <GreetingHeader />
 
@@ -42,11 +47,6 @@ export default function KioskDashboard() {
 
         {/* Ask Nexy bar */}
         <AskNexyBar />
-
-        {/* Version badge */}
-        <p className="text-center text-[10px] text-gray-300 dark:text-gray-600 select-none leading-none pb-1">
-          {VERSION_LABEL}
-        </p>
       </div>
 
       {/* ── Right panel ─────────────────────────────────────────── */}

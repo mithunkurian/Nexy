@@ -1,21 +1,29 @@
 import type { Device, Room, ChatMessage, ChatResponse } from "@/types";
 import { loadSettings } from "./settings";
+import { auth } from "./firebase";
 
 function apiBase(): string {
   const s = loadSettings();
   return `${s.backendUrl.replace(/\/$/, "")}/api/v1`;
 }
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await auth.currentUser?.getIdToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${apiBase()}${path}`, { cache: "no-store" });
+  const headers = await authHeaders();
+  const res = await fetch(`${apiBase()}${path}`, { cache: "no-store", headers });
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
   return res.json();
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
+  const headers = await authHeaders();
   const res = await fetch(`${apiBase()}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
@@ -39,9 +47,10 @@ export const api = {
       history: ChatMessage[],
       onToken: (token: string) => void,
     ): Promise<void> => {
+      const headers = await authHeaders();
       const res = await fetch(`${apiBase()}/ai/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ message, history }),
       });
       if (!res.body) return;

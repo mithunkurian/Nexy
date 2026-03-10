@@ -3,6 +3,7 @@ from typing import List
 from ...integrations.registry import get_registry, IntegrationRegistry
 from ...models.device import Device, DeviceCommand, Room
 from ...core.websocket import manager
+from ...core.auth_dep import get_current_user
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -12,17 +13,27 @@ def get_reg() -> IntegrationRegistry:
 
 
 @router.get("/", response_model=List[Device])
-async def list_devices(registry: IntegrationRegistry = Depends(get_reg)):
+async def list_devices(
+    registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
+):
     return await registry.get_all_devices()
 
 
 @router.get("/rooms", response_model=List[Room])
-async def list_rooms(registry: IntegrationRegistry = Depends(get_reg)):
+async def list_rooms(
+    registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
+):
     return await registry.get_all_rooms()
 
 
 @router.get("/{device_id}", response_model=Device)
-async def get_device(device_id: str, registry: IntegrationRegistry = Depends(get_reg)):
+async def get_device(
+    device_id: str,
+    registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
+):
     devices = await registry.get_all_devices()
     device = next((d for d in devices if d.id == device_id), None)
     if not device:
@@ -35,6 +46,7 @@ async def command_device(
     device_id: str,
     command: DeviceCommand,
     registry: IntegrationRegistry = Depends(get_reg),
+    _user: dict = Depends(get_current_user),
 ):
     ok = await registry.send_command(device_id, command)
     if not ok:

@@ -28,6 +28,11 @@ function PortraitDashboard() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+      {/* Version badge — top left */}
+      <p className="text-left text-[11px] text-gray-300 dark:text-gray-600 select-none -mb-2">
+        {VERSION_LABEL}
+      </p>
+
       {/* 1 — Greeting (always visible, reads from Settings) */}
       <GreetingHeader />
 
@@ -60,11 +65,6 @@ function PortraitDashboard() {
 
       {/* 7 — Nexy AI bar (always visible at bottom) */}
       <AskNexyBar />
-
-      {/* 8 — Version badge */}
-      <p className="text-center text-[11px] text-gray-300 dark:text-gray-600 pb-2 select-none">
-        {VERSION_LABEL}
-      </p>
     </div>
   );
 }

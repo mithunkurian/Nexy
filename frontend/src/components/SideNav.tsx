@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, MessageCircle, Layers, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const NAV = [
   { href: "/",         label: "Home",     icon: Home },
@@ -13,6 +14,8 @@ const NAV = [
 
 export function SideNav() {
   const pathname = usePathname();
+  const { role } = useAuth();
+  const visibleNav = NAV.filter(({ href }) => href !== "/settings" || role === "admin");
 
   return (
     <nav className="fixed left-0 top-0 bottom-0 z-50 w-16 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-r border-gray-100 dark:border-gray-800 flex flex-col items-center py-5 gap-1">
@@ -21,7 +24,7 @@ export function SideNav() {
         <span className="text-white text-sm font-bold select-none">N</span>
       </div>
 
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {visibleNav.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || (href !== "/" && pathname.startsWith(href));
         return (
           <Link
