@@ -3,32 +3,46 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   type ReactNode,
 } from "react";
 import {
   type AppSettings,
+  type HomeSettings,
+  type UserSettings,
+  DEFAULT_HOME_SETTINGS,
   DEFAULT_SETTINGS,
+  DEFAULT_USER_SETTINGS,
   loadSettings,
   saveSettings,
+  mergeSettings,
+  splitSettings,
+  pickHomePatch,
+  pickUserPatch,
 } from "@/lib/settings";
 import { auth, db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { useAuth } from "./AuthContext";
 
-// Firestore document that holds all settings (one doc for the whole home)
-const SETTINGS_REF = () => doc(db, "settings", "main");
+const HOME_SETTINGS_REF = () => doc(db, "homeSettings", "main");
+const USER_SETTINGS_REF = (uid: string) => doc(db, "userSettings", uid);
 
 interface SettingsContextValue {
   settings: AppSettings;
-  hydrated: boolean;   // true once localStorage has been read
-  synced: boolean;     // true once Firestore has responded (or failed gracefully)
+  homeSettings: HomeSettings;
+  userSettings: UserSettings;
+  hydrated: boolean;
+  synced: boolean;
   update: (patch: Partial<AppSettings>) => void;
   reset: () => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
   settings: DEFAULT_SETTINGS,
+  homeSettings: DEFAULT_HOME_SETTINGS,
+  userSettings: DEFAULT_USER_SETTINGS,
   hydrated: false,
   synced: false,
   update: () => {},
@@ -36,44 +50,84 @@ const SettingsContext = createContext<SettingsContextValue>({
 });
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const { role, user } = useAuth();
+  const [homeSettings, setHomeSettings] = useState<HomeSettings>(DEFAULT_HOME_SETTINGS);
+  const [userSettings, setUserSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
   const [synced, setSynced] = useState(false);
 
   useEffect(() => {
-    // ── Step 1: Load from localStorage immediately (fast) ────────────────────
     const local = loadSettings();
-    setSettings(local);
+    const split = splitSettings(local);
+    setHomeSettings(split.home);
+    setUserSettings(split.user);
     setHydrated(true);
-
-    // ── Step 2: Subscribe to Firestore for live cross-device sync ────────────
-    const ref = SETTINGS_REF();
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          // Remote settings exist — merge with defaults and apply everywhere
-          const remote: AppSettings = { ...DEFAULT_SETTINGS, ...snap.data() };
-          setSettings(remote);
-          saveSettings(remote); // keep localStorage in sync as a cache
-        } else {
-          // No Firestore doc yet — push local settings up to the cloud (admin only)
-          if (auth.currentUser) setDoc(ref, local).catch(console.error);
-        }
-        setSynced(true);
-      },
-      (err) => {
-        // Firestore unavailable (offline, rules, etc.) — silently fall back to localStorage
-        console.warn("Firestore sync unavailable, using localStorage:", err.message);
-        setSynced(true);
-      }
-    );
-
-    return unsub; // clean up listener on unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Apply theme class to <html> ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const unsubs: Array<() => void> = [];
+    let homeReady = false;
+    let userReady = !user;
+
+    const markSynced = () => {
+      if (homeReady && userReady) setSynced(true);
+    };
+
+    unsubs.push(onSnapshot(
+      HOME_SETTINGS_REF(),
+      (snap) => {
+        if (snap.exists()) {
+          setHomeSettings({ ...DEFAULT_HOME_SETTINGS, ...snap.data() });
+        } else if (auth.currentUser && role === "admin") {
+          setDoc(HOME_SETTINGS_REF(), homeSettings).catch(console.error);
+        }
+        homeReady = true;
+        markSynced();
+      },
+      (err) => {
+        console.warn("Home settings sync unavailable, using local cache:", err.message);
+        homeReady = true;
+        markSynced();
+      },
+    ));
+
+    if (user) {
+      unsubs.push(onSnapshot(
+        USER_SETTINGS_REF(user.uid),
+        (snap) => {
+          if (snap.exists()) {
+            setUserSettings({ ...DEFAULT_USER_SETTINGS, ...snap.data() });
+          } else if (auth.currentUser) {
+            setDoc(USER_SETTINGS_REF(user.uid), userSettings).catch(console.error);
+          }
+          userReady = true;
+          markSynced();
+        },
+        (err) => {
+          console.warn("User settings sync unavailable, using local cache:", err.message);
+          userReady = true;
+          markSynced();
+        },
+      ));
+    } else {
+      setUserSettings(DEFAULT_USER_SETTINGS);
+      userReady = true;
+      markSynced();
+    }
+
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [hydrated, role, user]);
+
+  const settings = useMemo(() => mergeSettings(homeSettings, userSettings), [homeSettings, userSettings]);
+
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
   useEffect(() => {
     const html = document.documentElement;
     html.classList.remove("dark", "light");
@@ -82,31 +136,45 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } else if (settings.theme === "light") {
       html.classList.add("light");
     } else {
-      // system
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       html.classList.add(mq.matches ? "dark" : "light");
     }
   }, [settings.theme]);
 
-  // ── update: write to localStorage + Firestore ───────────────────────────────
   const update = useCallback((patch: Partial<AppSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      saveSettings(next);                                                          // localStorage (instant)
-      if (auth.currentUser) setDoc(SETTINGS_REF(), next).catch(console.error);   // Firestore (authenticated only)
-      return next;
-    });
-  }, []);
+    const homePatch = pickHomePatch(patch);
+    const userPatch = pickUserPatch(patch);
 
-  // ── reset: restore defaults everywhere ──────────────────────────────────────
+    if (Object.keys(homePatch).length > 0 && role === "admin") {
+      setHomeSettings((prev) => {
+        const next = { ...prev, ...homePatch };
+        setDoc(HOME_SETTINGS_REF(), next).catch(console.error);
+        return next;
+      });
+    }
+
+    if (Object.keys(userPatch).length > 0) {
+      setUserSettings((prev) => {
+        const next = { ...prev, ...userPatch };
+        if (user) setDoc(USER_SETTINGS_REF(user.uid), next).catch(console.error);
+        return next;
+      });
+    }
+  }, [role, user]);
+
   const reset = useCallback(() => {
-    saveSettings(DEFAULT_SETTINGS);
-    setSettings(DEFAULT_SETTINGS);
-    if (auth.currentUser) setDoc(SETTINGS_REF(), DEFAULT_SETTINGS).catch(console.error);
-  }, []);
+    if (role === "admin") {
+      setHomeSettings(DEFAULT_HOME_SETTINGS);
+      setDoc(HOME_SETTINGS_REF(), DEFAULT_HOME_SETTINGS).catch(console.error);
+    }
+    setUserSettings(DEFAULT_USER_SETTINGS);
+    if (user) setDoc(USER_SETTINGS_REF(user.uid), DEFAULT_USER_SETTINGS).catch(console.error);
+  }, [role, user]);
 
   return (
-    <SettingsContext.Provider value={{ settings, hydrated, synced, update, reset }}>
+    <SettingsContext.Provider
+      value={{ settings, homeSettings, userSettings, hydrated, synced, update, reset }}
+    >
       {children}
     </SettingsContext.Provider>
   );

@@ -9,3 +9,11 @@ export interface UserProfile {
   disabled: boolean;
   createdAt: number; // Unix ms
 }
+
+export interface AllowedUser {
+  email: string;
+  role: Exclude<Role, "pending">;
+  invitedAt: number;
+  invitedBy?: string;
+  claimedByUid?: string;
+}

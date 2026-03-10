@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, authError } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,8 +54,8 @@ export default function LoginPage() {
         {loading ? "Signing in…" : "Continue with Google"}
       </button>
 
-      {error && (
-        <p className="mt-4 text-sm text-red-500 dark:text-red-400">{error}</p>
+      {(error || authError) && (
+        <p className="mt-4 text-sm text-red-500 dark:text-red-400">{error ?? authError}</p>
       )}
     </div>
   );

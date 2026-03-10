@@ -2,41 +2,57 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    function myUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
-    // ─── settings/main ────────────────────────────────────────────────────────
-    // Any authenticated user can read (needed for SettingsContext on all devices)
-    // Only admins can write settings
-    match /settings/{doc} {
-      allow read: if isSignedIn();
+    function myUserDoc() {
+      return get(myUserPath());
+    }
+
+    function isApprovedUser() {
+      return isSignedIn() &&
+        exists(myUserPath()) &&
+        myUserDoc().data.disabled == false &&
+        myUserDoc().data.role in ["admin", "family"];
+    }
+
+    function isAdmin() {
+      return isApprovedUser() && myUserDoc().data.role == "admin";
+    }
+
+    match /homeSettings/{doc} {
+      allow read: if isApprovedUser();
       allow write: if isAdmin();
     }
 
-    // ─── users/{uid} ─────────────────────────────────────────────────────────
-    // A user can read their own profile (AuthContext needs this on sign-in)
-    // A user can create their own profile on first sign-in (bootstrap)
-    // Only admins can update any profile; users cannot escalate their own role/disabled
-    // Only admins can delete user records
+    match /userSettings/{uid} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow write: if isAdmin() || request.auth.uid == uid;
+    }
+
+    match /allowedUsers/{email} {
+      allow read, write: if isAdmin();
+    }
+
     match /users/{uid} {
       allow read: if request.auth.uid == uid || isAdmin();
 
-      // First sign-in: user creates their own profile
-      allow create: if request.auth.uid == uid;
+      allow create: if request.auth.uid == uid &&
+        request.resource.data.email is string &&
+        exists(/databases/$(database)/documents/allowedUsers/$(request.resource.data.email)) &&
+        get(/databases/$(database)/documents/allowedUsers/$(request.resource.data.email)).data.role == request.resource.data.role &&
+        request.resource.data.disabled == false;
 
-      // Admin can update anything; users can update non-sensitive fields only
       allow update: if isAdmin() ||
         (request.auth.uid == uid &&
          !("role" in request.resource.data.diff(resource.data).affectedKeys()) &&
-         !("disabled" in request.resource.data.diff(resource.data).affectedKeys()));
+         !("disabled" in request.resource.data.diff(resource.data).affectedKeys()) &&
+         !("email" in request.resource.data.diff(resource.data).affectedKeys()));
 
       allow delete: if isAdmin();
     }

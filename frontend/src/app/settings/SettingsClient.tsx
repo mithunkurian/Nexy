@@ -42,18 +42,18 @@ import { useLandscape } from "@/hooks/useLandscape";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserManagement } from "@/hooks/useUserManagement";
-import type { Role } from "@/types/auth";
+import type { AllowedUser, Role } from "@/types/auth";
 
 // ─── Section nav config ───────────────────────────────────────────────────────
 
 const ALL_SECTIONS = [
   { id: "profile",    title: "Profile",       icon: User,    adminOnly: false },
   { id: "appearance", title: "Appearance",    icon: Palette, adminOnly: false },
-  { id: "connection", title: "Connection",    icon: Wifi,    adminOnly: false },
+  { id: "connection", title: "Connection",    icon: Wifi,    adminOnly: true  },
   { id: "commute",    title: "Commute",       icon: Bus,     adminOnly: false },
-  { id: "ai",         title: "AI Provider",   icon: Bot,     adminOnly: false },
+  { id: "ai",         title: "AI Provider",   icon: Bot,     adminOnly: true  },
   { id: "calendar",   title: "Calendar",      icon: Calendar,adminOnly: false },
-  { id: "sync",       title: "Sync",          icon: Share2,  adminOnly: false },
+  { id: "sync",       title: "Sync",          icon: Share2,  adminOnly: true  },
   { id: "users",      title: "Users & Access",icon: Shield,  adminOnly: true  },
   { id: "about",      title: "About",         icon: Server,  adminOnly: false },
 ] as const;
@@ -207,8 +207,8 @@ export default function SettingsClient() {
   const landscape = useLandscape();
   const { settings, hydrated, synced, update, reset } = useSettings();
   const { isSignedIn, isLoading: authLoading, error: authError, calendarList, signIn, signOut: signOutCalendar } = useGoogleAuth();
-  const { role, signOut: signOutApp } = useAuth();
-  const { users, updateRole, toggleDisabled, deleteUser } = useUserManagement();
+  const { user, role, signOut: signOutApp } = useAuth();
+  const { users, allowedUsers, addAllowedUser, removeAllowedUser, updateRole, toggleDisabled, deleteUser } = useUserManagement(role === "admin");
   const [draft, setDraft] = useState<AppSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
   const [importCode, setImportCode] = useState("");
@@ -217,13 +217,15 @@ export default function SettingsClient() {
   const [activeSection, setActiveSection] = useState<SectionId>("profile");
   const [newRoute, setNewRoute] = useState<Omit<TransitRoute, "id">>({ fromStop: "", toStop: "", lineFilter: "" });
   const [addingRoute, setAddingRoute] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<AllowedUser["role"]>("family");
 
   // Only show sections appropriate for this user's role
   const SECTIONS = ALL_SECTIONS.filter((s) => !s.adminOnly || role === "admin");
   useEffect(() => {
     if (hydrated || synced) setDraft({ ...settings });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, synced]);
+  }, [hydrated, synced, settings]);
 
   function patch<K extends keyof AppSettings>(key: K, val: AppSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: val }));
@@ -264,25 +266,40 @@ export default function SettingsClient() {
     }
   }
 
+  async function handleInviteUser() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) return;
+    await addAllowedUser(email, inviteRole, user?.uid);
+    setInviteEmail("");
+    setInviteRole("family");
+  }
+
   // ── Section content blocks ──────────────────────────────────────────────────
 
   const sectionContent: Record<SectionId, React.ReactNode> = {
 
     profile: (
       <SectionCard title="Profile" icon={User}>
-        <Field label="Your Name" hint="Used for personalized greetings on the dashboard">
+        <Field label="Your Name" hint="Used for personalized greetings on this account">
           <TextInput value={draft.ownerName} onChange={(v) => patch("ownerName", v)} placeholder="e.g. Mithun" />
         </Field>
-        <Field label="Home Name" hint="Displayed at the top of the dashboard">
-          <TextInput value={draft.homeName} onChange={(v) => patch("homeName", v)} placeholder="e.g. My Home" />
-        </Field>
-        <Field label="Address" hint="Your home address — used for weather location">
-          <TextInput value={draft.address} onChange={(v) => patch("address", v)} placeholder="e.g. Huddinge, Sweden" />
-        </Field>
+        {role === "admin" && (
+          <>
+            <Field label="Home Name" hint="Displayed at the top of the dashboard for the whole home">
+              <TextInput value={draft.homeName} onChange={(v) => patch("homeName", v)} placeholder="e.g. My Home" />
+            </Field>
+            <Field label="Address" hint="Shared home address used for weather and live info">
+              <TextInput value={draft.address} onChange={(v) => patch("address", v)} placeholder="e.g. Huddinge, Sweden" />
+            </Field>
+          </>
+        )}
         {/* Sign Out */}
         <div className="px-5 py-4 border-t border-gray-50 dark:border-gray-800">
           <button
-            onClick={() => signOutApp()}
+            onClick={() => {
+              signOutCalendar();
+              signOutApp();
+            }}
             className="flex items-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors"
           >
             <LogOut size={14} /> Sign out of Nexy
@@ -326,7 +343,7 @@ export default function SettingsClient() {
         {/* Route list */}
         <Field
           label="Transit Routes"
-          hint="Each route fetches departures from a stop filtered by line number. Add up to 6 routes."
+          hint="Each route fetches departures from a stop filtered by line number. These are personal to this user."
         >
           <div className="space-y-2">
             {draft.transitRoutes.map((route) => (
@@ -412,21 +429,25 @@ export default function SettingsClient() {
           </div>
         </Field>
 
-        <Field label="Trafiklab API Key" hint="Free key from trafiklab.se → ResRobot API. Required for transit times.">
-          <TextInput value={draft.trafiklabApiKey} onChange={(v) => patch("trafiklabApiKey", v)} placeholder="Enter your ResRobot API key" type="password" />
-        </Field>
-        <Field label="Electricity Zone" hint="Swedish price zone for live electricity prices">
-          <ChipGroup<string>
-            value={draft.electricityZone || "SE3"}
-            onChange={(v) => patch("electricityZone", v)}
-            options={[
-              { value: "SE1", label: "SE1 (North)" },
-              { value: "SE2", label: "SE2 (Mid-N)" },
-              { value: "SE3", label: "SE3 (Stockholm)" },
-              { value: "SE4", label: "SE4 (South)" },
-            ]}
-          />
-        </Field>
+        {role === "admin" && (
+          <>
+            <Field label="Trafiklab API Key" hint="Free key from trafiklab.se → ResRobot API. Required for household transit times.">
+              <TextInput value={draft.trafiklabApiKey} onChange={(v) => patch("trafiklabApiKey", v)} placeholder="Enter your ResRobot API key" type="password" />
+            </Field>
+            <Field label="Electricity Zone" hint="Shared Swedish price zone for household electricity prices">
+              <ChipGroup<string>
+                value={draft.electricityZone || "SE3"}
+                onChange={(v) => patch("electricityZone", v)}
+                options={[
+                  { value: "SE1", label: "SE1 (North)" },
+                  { value: "SE2", label: "SE2 (Mid-N)" },
+                  { value: "SE3", label: "SE3 (Stockholm)" },
+                  { value: "SE4", label: "SE4 (South)" },
+                ]}
+              />
+            </Field>
+          </>
+        )}
       </SectionCard>
     ),
 
@@ -588,6 +609,49 @@ export default function SettingsClient() {
 
     users: (
       <SectionCard title="Users & Access" icon={Shield}>
+        <Field label="Add User" hint="Only approved email addresses can sign in to this Nexy home.">
+          <div className="flex flex-col gap-2">
+            <TextInput value={inviteEmail} onChange={setInviteEmail} placeholder="name@example.com" />
+            <ChipGroup<AllowedUser["role"]>
+              value={inviteRole}
+              onChange={setInviteRole}
+              options={[
+                { value: "family", label: "Family" },
+                { value: "admin", label: "Admin" },
+              ]}
+            />
+            <button
+              onClick={handleInviteUser}
+              disabled={!inviteEmail.trim()}
+              className="self-start px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-40 hover:bg-blue-600 transition-colors"
+            >
+              Add approved user
+            </button>
+          </div>
+        </Field>
+        {allowedUsers.length > 0 && (
+          <div className="px-5 py-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Approved Emails</p>
+            {allowedUsers.map((allowed) => (
+              <div key={allowed.email} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{allowed.email}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {allowed.role}
+                    {allowed.claimedByUid ? " · joined" : " · waiting for first login"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removeAllowedUser(allowed.email)}
+                  title="Remove approved email"
+                  className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {users.length === 0 ? (
           <div className="px-5 py-4 text-xs text-gray-400">No users found.</div>
         ) : (
@@ -637,7 +701,7 @@ export default function SettingsClient() {
         )}
         <div className="px-5 py-3 border-t border-gray-50 dark:border-gray-800">
           <p className="text-[11px] text-gray-400 dark:text-gray-500">
-            New users see a &ldquo;Waiting for approval&rdquo; screen until you change their role to Family or Admin.
+            Users must be added here before they can sign in. Once they join, you can disable or promote them.
           </p>
         </div>
       </SectionCard>

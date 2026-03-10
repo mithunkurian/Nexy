@@ -23,13 +23,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-gray-50 dark:bg-gray-950 transition-colors">
-        <SettingsProvider>
           <AuthProvider>
+        <SettingsProvider>
             <RouteGuard>
               <LayoutShell>{children}</LayoutShell>
             </RouteGuard>
-          </AuthProvider>
         </SettingsProvider>
+          </AuthProvider>
       </body>
     </html>
   );

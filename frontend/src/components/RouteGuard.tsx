@@ -7,9 +7,6 @@ import { useAuth } from "@/contexts/AuthContext";
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login"];
 
-// Routes that require admin role
-const ADMIN_ROUTES = ["/settings"];
-
 export function RouteGuard({ children }: { children: ReactNode }) {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
@@ -19,8 +16,6 @@ export function RouteGuard({ children }: { children: ReactNode }) {
     if (loading) return;
 
     const isPublic = PUBLIC_ROUTES.includes(pathname);
-    const isAdminRoute = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
-
     if (!user && !isPublic) {
       router.replace("/login");
       return;
@@ -28,9 +23,6 @@ export function RouteGuard({ children }: { children: ReactNode }) {
     if (user && isPublic) {
       router.replace("/");
       return;
-    }
-    if (profile?.role === "family" && isAdminRoute) {
-      router.replace("/");
     }
   }, [loading, user, profile, pathname, router]);
 

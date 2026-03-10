@@ -1,6 +1,6 @@
 """FastAPI dependency for Firebase authentication."""
 from fastapi import Header, HTTPException, status
-from .firebase_admin_init import verify_token
+from .firebase_admin_init import verify_token, get_user_profile
 
 
 async def get_current_user(authorization: str = Header(default="")) -> dict:
@@ -11,4 +11,6 @@ async def get_current_user(authorization: str = Header(default="")) -> dict:
             detail="Missing or invalid Authorization header",
         )
     token = authorization[len("Bearer "):]
-    return verify_token(token)
+    decoded = verify_token(token)
+    profile = get_user_profile(decoded["uid"])
+    return {**decoded, "profile": profile}

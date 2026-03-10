@@ -19,20 +19,17 @@ import {
   getDoc,
   setDoc,
   onSnapshot,
-  collection,
-  query,
-  limit,
-  getDocs,
+  type DocumentData,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import type { UserProfile, Role } from "@/types/auth";
+import type { AllowedUser, UserProfile } from "@/types/auth";
 
-// ─── Context shape ────────────────────────────────────────────────────────────
 interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
-  role: Role | null;
+  role: UserProfile["role"] | null;
   loading: boolean;
+  authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -42,21 +39,37 @@ const AuthContext = createContext<AuthContextValue>({
   profile: null,
   role: null,
   loading: true,
+  authError: null,
   signInWithGoogle: async () => {},
   signOut: async () => {},
 });
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
+function normalizeEmail(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
+function toUserProfile(data: DocumentData): UserProfile {
+  return {
+    uid: data.uid,
+    email: data.email,
+    displayName: data.displayName,
+    photoURL: data.photoURL ?? null,
+    role: data.role,
+    disabled: Boolean(data.disabled),
+    createdAt: data.createdAt ?? Date.now(),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     let profileUnsub: (() => void) | null = null;
 
     const authUnsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      // Clean up previous profile listener if user changed
       profileUnsub?.();
       profileUnsub = null;
 
@@ -67,49 +80,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setUser(firebaseUser);
-      const ref = doc(db, "users", firebaseUser.uid);
-      const snap = await getDoc(ref);
+      setLoading(true);
+      setAuthError(null);
 
-      if (!snap.exists()) {
-        // First sign-in for this user — determine role
-        try {
-          const anyUser = await getDocs(query(collection(db, "users"), limit(1)));
-          const role: Role = anyUser.empty ? "admin" : "pending";
+      try {
+        const userRef = doc(db, "users", firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+          const normalizedEmail = normalizeEmail(firebaseUser.email);
+          const allowedRef = doc(db, "allowedUsers", normalizedEmail);
+          const allowedSnap = await getDoc(allowedRef);
+
+          if (!allowedSnap.exists()) {
+            setAuthError("This Google account is not approved for this Nexy home.");
+            await fbSignOut(auth);
+            setLoading(false);
+            return;
+          }
+
+          const invite = allowedSnap.data() as AllowedUser;
           const newProfile: UserProfile = {
             uid: firebaseUser.uid,
-            email: firebaseUser.email ?? "",
+            email: normalizedEmail,
             displayName: firebaseUser.displayName ?? firebaseUser.email ?? "User",
             photoURL: firebaseUser.photoURL,
-            role,
+            role: invite.role,
             disabled: false,
             createdAt: Date.now(),
           };
-          await setDoc(ref, newProfile);
-        } catch (err) {
-          console.error("Failed to create user profile in Firestore:", err);
-          // Fall back: treat as pending so the app doesn't hang
-          setProfile({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email ?? "",
-            displayName: firebaseUser.displayName ?? "",
-            photoURL: firebaseUser.photoURL,
-            role: "pending",
-            disabled: false,
-            createdAt: Date.now(),
-          });
-          setLoading(false);
-          return;
+          await setDoc(userRef, newProfile);
+          await setDoc(allowedRef, { ...invite, claimedByUid: firebaseUser.uid }, { merge: true });
         }
-      }
 
-      // Live subscription — admin role changes propagate instantly
-      profileUnsub = onSnapshot(ref, (s) => {
-        if (s.exists()) {
-          setProfile(s.data() as UserProfile);
-        }
+        profileUnsub = onSnapshot(userRef, (snap) => {
+          if (!snap.exists()) {
+            setProfile(null);
+            setAuthError("Your Nexy access record is missing. Contact the admin.");
+          } else {
+            setUser(firebaseUser);
+            setProfile(toUserProfile(snap.data()));
+          }
+          setLoading(false);
+        });
+      } catch (err) {
+        console.error("Failed to load Nexy auth profile:", err);
+        setAuthError("Could not verify your Nexy access right now.");
         setLoading(false);
-      });
+      }
     });
 
     return () => {
@@ -120,10 +138,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    setAuthError(null);
     await signInWithPopup(auth, provider);
   }, []);
 
   const signOut = useCallback(async () => {
+    setAuthError(null);
     await fbSignOut(auth);
   }, []);
 
@@ -134,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         role: profile?.role ?? null,
         loading,
+        authError,
         signInWithGoogle,
         signOut,
       }}
@@ -143,7 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useAuth() {
   return useContext(AuthContext);
 }
